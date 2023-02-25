@@ -2,8 +2,8 @@
 # Copyright (c) 2023 furzoom.com, All rights reserved.
 # Author: mn, mn@furzoom.com
 
-DEBUG ?= -g -fsanitize=address -fno-omit-frame-pointer
-CFLAGS ?= -Wall -Werror -DSDS_ABORT_ON_OOM
+DEBUG ?= -g
+CFLAGS ?= -O2 -Wall -Werror -DSDS_ABORT_ON_OOM
 CCOPT = $(CFLAGS)
 
 OBJ = cutis.o adlist.o ae.o anet.o dict.o sds.o zmalloc.o
