@@ -114,6 +114,7 @@ static void FreeClient(CutisClient *c) {
   AeDeleteFileEvent(server.el, c->fd, AE_READABLE);
   AeDeleteFileEvent(server.el, c->fd, AE_WRITABLE);
   close(c->fd);
+  sdsfree(c->query_buf);
   zfree(c);
 }
 
