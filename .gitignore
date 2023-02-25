@@ -1,5 +1,19 @@
+############################
+# directories
+############################
+# project
 .idea/
 
+############################
+# files
+############################
+# build files
 *.o
 *.a
 *.exe
+
+# logs
+*.log
+
+# build products
+cutis-server

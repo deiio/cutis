@@ -3,7 +3,7 @@
  * Author: mn, mn@furzoom.com
  */
 
-#include "dict.h"
+#include "data_struct/dict.h"
 
 #include <assert.h>
 #include <stdarg.h>
@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "zmalloc.h"
+#include "memory/zmalloc.h"
 
 void DictFreeEntryVal(Dict *ht, DictEntry *entry) {
   if (ht->type->valDestructor) {

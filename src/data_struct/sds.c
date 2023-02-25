@@ -3,7 +3,7 @@
  * Author: mn, mn@furzoom.com
  */
 
-#include "sds.h"
+#include "data_struct/sds.h"
 
 #include <ctype.h>
 #include <stdarg.h>
@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "zmalloc.h"
+#include "memory/zmalloc.h"
 
 static void sdsOOMAbort() {
   fprintf(stderr, "SDS: Out Of Memory (SDS_ABORT_ON_OOM defined)\n");

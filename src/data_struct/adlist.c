@@ -3,11 +3,9 @@
  * Author: mn, mn@furzoom.com
  */
 
-#include "adlist.h"
+#include "data_struct/adlist.h"
 
-#include <stdlib.h>
-
-#include "zmalloc.h"
+#include "memory/zmalloc.h"
 
 List *listCreate() {
   List *list;
