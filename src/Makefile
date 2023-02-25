@@ -33,5 +33,11 @@ cutis-server: $(OBJ)
 %.o: %.c
 	$(CC) -c $(CCOPT) -o $@ $(DEBUG) $< $(INCLUDES)
 
+32bit:
+	@echo ""
+	@echo "WARNING: if it fails under Linux you probably need to install libc6-dev-i386"
+	@echo ""
+	$(MAKE) CFLAGS="-m32" LDFLAGS="-m32"
+
 clean:
 	$(RM) $(PRGNAME) $(OBJ) *.o
