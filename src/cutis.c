@@ -38,7 +38,7 @@
 
 /*============================== Data types ==============================*/
 
-// With multiplexing we need to toke pre-client state.
+// With multiplexing we need to take pre-client state.
 // Clients are taken in a liked list.
 typedef struct CutisClient {
   int fd;
