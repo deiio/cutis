@@ -1,0 +1,30 @@
+# More details please check the following link:
+# https://github.com/codespell-project/codespell
+name: Spellcheck
+
+on:
+  push:
+  pull_request:
+    types: [opened edited reopened review_requested]
+
+jobs:
+  build:
+    name: Spellcheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: pip cache
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Install prerequisites
+        run: sudo pip install -r ./.codespell/requirements.txt
+
+      - name: Spell check
+        run: codespell --config=./.codespell/.codespellrc
