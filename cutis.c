@@ -123,6 +123,8 @@ static int ServerCron(struct AeEventLoop *event_loop, long long id,
   CUTIS_NOT_USED(id);
   CUTIS_NOT_USED(client_data);
 
+  printf("memory used: %zu\n", zmalloc_used_memory());
+
   return 1000;
 }
 
