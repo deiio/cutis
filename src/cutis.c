@@ -11,12 +11,10 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "adlist.h"
-#include "ae.h"
-#include "anet.h"
-#include "dict.h"
-#include "sds.h"
-#include "zmalloc.h"
+#include "data_struct/sds.h"
+#include "event/ae.h"
+#include "memory/zmalloc.h"
+#include "net/anet.h"
 
 #define CUTIS_VERSION "0.01"
 

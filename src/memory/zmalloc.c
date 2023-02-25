@@ -3,7 +3,7 @@
  * Author: mn, mn@furzoom.com
  */
 
-#include "zmalloc.h"
+#include "memory/zmalloc.h"
 
 #include <stdlib.h>
 #include <string.h>
