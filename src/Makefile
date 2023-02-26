@@ -13,19 +13,52 @@ OBJ = data_struct/adlist.o  \
 	  event/ae.o 			\
 	  memory/zmalloc.o 		\
 	  net/anet.o 			\
+	  server/server.o		\
+	  server/client.o		\
+	  utils/log.o			\
 	  cutis.o
 
 PRGNAME = cutis-server
 
 all: cutis-server
 
-data_struct/adlist.o: data_struct/adlist.c data_struct/adlist.h memory/zmalloc.h
-data_struct/dict.o: data_struct/dict.c data_struct/dict.h memory/zmalloc.h
-data_struct/sds.o: data_struct/sds.c data_struct/sds.h memory/zmalloc.h
-event/ae.o: event/ae.c event/ae.h memory/zmalloc.h
+data_struct/adlist.o: data_struct/adlist.c data_struct/adlist.h \
+                      memory/zmalloc.h
+
+data_struct/dict.o: data_struct/dict.c data_struct/dict.h \
+                    memory/zmalloc.h
+
+data_struct/sds.o: data_struct/sds.c data_struct/sds.h \
+                   memory/zmalloc.h
+
+event/ae.o: event/ae.c event/ae.h \
+            memory/zmalloc.h
+
 memory/zmalloc.o: memory/zmalloc.c memory/zmalloc.h
+
 net/anet.o: net/anet.c net/anet.h
-cutis.o: cutis.c event/ae.h
+
+server/server.o: server/server.c server/server.h \
+                 event/ae.h \
+                 memory/zmalloc.h \
+                 net/anet.h \
+                 server/client.h \
+                 utils/log.h
+server/client.o: server/client.c server/client.h \
+                 data_struct/sds.h \
+                 event/ae.h \
+                 memory/zmalloc.h \
+                 net/anet.h \
+                 server/server.h \
+                 utils/log.h
+
+utils/log.o: utils/log.c utils/log.h \
+             server/server.h
+
+cutis.o: cutis.c \
+         server/server.h \
+         utils/log.h \
+         version.h
 
 cutis-server: $(OBJ)
 	$(CC) -o $(PRGNAME) $(CCOPT) $(DEBUG) $(OBJ)
