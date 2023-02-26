@@ -5,6 +5,7 @@
 
 #include "event/ae.h"
 
+#include <errno.h>
 #include <stdlib.h>
 #include <sys/select.h>
 #include <sys/time.h>
@@ -42,7 +43,17 @@ void AeStop(AeEventLoop *event_loop) {
 int AeCreateFileEvent(AeEventLoop *event_loop, int fd, int mask,
                       AeFileProc *proc, void *client_data,
                       AeEventFinalizerProc *finalizer_proc) {
-  AeFileEvent *fe;
+  AeFileEvent *fe = event_loop->file_event_head;
+
+  while (fe) {
+    if (fe->fd == fd && fe->mask & mask) {
+      fe->file_proc = proc;
+      fe->finalizer_proc = finalizer_proc;
+      fe->client_data = client_data;
+      return AE_OK;
+    }
+    fe = fe->next;
+  }
 
   fe = zmalloc(sizeof(*fe));
   if (fe == NULL) {
@@ -241,7 +252,9 @@ int AeProcessEvents(AeEventLoop *event_loop, int flags) {
         }
       }
     } else if (ret_val < 0) {
-      exit(1);
+      if (errno != EINTR) {
+        exit(1);
+      }
     }
   }
 
