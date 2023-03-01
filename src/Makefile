@@ -7,20 +7,26 @@ CFLAGS ?= -O2 -Wall -Werror -DSDS_ABORT_ON_OOM
 CCOPT = $(CFLAGS)
 INCLUDES ?= -I.
 
-OBJ = data_struct/adlist.o  \
-	  data_struct/dict.o 	\
-	  data_struct/sds.o 	\
-	  event/ae.o 			\
-	  memory/zmalloc.o 		\
-	  net/anet.o 			\
-	  server/server.o		\
-	  server/client.o		\
-	  utils/log.o			\
-	  cutis.o
+OBJ = commands/command.o    \
+      data_struct/adlist.o  \
+      data_struct/dict.o    \
+      data_struct/sds.o     \
+      event/ae.o            \
+      memory/zmalloc.o      \
+      net/anet.o            \
+      server/server.o       \
+      server/client.o       \
+      utils/log.o           \
+      cutis.o
 
 PRGNAME = cutis-server
 
 all: cutis-server
+
+commands/command.o: commands/command.c commands/command.h \
+                    server/client.h                       \
+                    memory/zmalloc.h                      \
+                    utils/log.h
 
 data_struct/adlist.o: data_struct/adlist.c data_struct/adlist.h \
                       memory/zmalloc.h
@@ -39,25 +45,27 @@ memory/zmalloc.o: memory/zmalloc.c memory/zmalloc.h
 net/anet.o: net/anet.c net/anet.h
 
 server/server.o: server/server.c server/server.h \
-                 event/ae.h \
-                 memory/zmalloc.h \
-                 net/anet.h \
-                 server/client.h \
+                 data_struct/adlist.h            \
+                 event/ae.h                      \
+                 memory/zmalloc.h                \
+                 net/anet.h                      \
+                 server/client.h                 \
                  utils/log.h
 server/client.o: server/client.c server/client.h \
-                 data_struct/sds.h \
-                 event/ae.h \
-                 memory/zmalloc.h \
-                 net/anet.h \
-                 server/server.h \
+                 data_struct/adlist.h            \
+                 data_struct/sds.h               \
+                 event/ae.h                      \
+                 memory/zmalloc.h                \
+                 net/anet.h                      \
+                 server/server.h                 \
                  utils/log.h
 
 utils/log.o: utils/log.c utils/log.h \
              server/server.h
 
-cutis.o: cutis.c \
+cutis.o: cutis.c         \
          server/server.h \
-         utils/log.h \
+         utils/log.h     \
          version.h
 
 cutis-server: $(OBJ)

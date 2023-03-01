@@ -25,7 +25,7 @@ void CutisLog(int level, const char *fmt, ...) {
   va_start(ap, fmt);
   if (level >= server->verbosity) {
     char *c = ".-*";
-    fprintf(file, "%c", c[level]);
+    fprintf(file, "%c ", c[level]);
     vfprintf(file, fmt, ap);
     fprintf(file, "\n");
     fflush(file);
