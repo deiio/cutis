@@ -33,6 +33,21 @@ AeEventLoop *AeCreateEventLoop() {
 }
 
 void AeDeleteEventLoop(AeEventLoop *event_loop) {
+  AeFileEvent *fe = event_loop->file_event_head;
+  AeTimeEvent *te = event_loop->time_event_head;
+
+  while (fe) {
+    AeFileEvent *cur = fe;
+    fe = fe->next;
+    zfree(cur);
+  }
+
+  while (te) {
+    AeTimeEvent *cur = te;
+    te = te->next;
+    zfree(cur);
+  }
+
   zfree(event_loop);
 }
 

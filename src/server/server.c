@@ -7,6 +7,7 @@
 
 #include <signal.h>
 #include <stdlib.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "memory/zmalloc.h"
@@ -32,24 +33,32 @@ CutisServer *GetSingletonServer() {
 
 void InitServerConfig(CutisServer *server) {
   server->port = CUTIS_SERVER_PORT;
+  server->el = NULL;
+  server->fd = -1;
+
   server->bind_addr = NULL;
   server->log_file = NULL;
   server->verbosity = CUTIS_DEBUG;
-  server->el = NULL;
-  server->fd = -1;
+  server->max_idle_time = CUTIS_MAX_IDLE_TIME;
 }
 
 void InitServer(CutisServer *server) {
   signal(SIGPIPE, SIG_IGN);
   signal(SIGHUP, SIG_IGN);
   signal(SIGINT, &interrupt_handler);
+
+  server->clients = listCreate();
   server->el = AeCreateEventLoop();
+  if (!server->clients) {
+    CutisOom("server initialization");
+  }
   server->fd = anetTcpServer(server->neterr, server->port, server->bind_addr);
   if (server->fd == -1) {
     CutisLog(CUTIS_WARNING, "Opening TCP port: %s", server->neterr);
     exit(1);
   }
-  AeCreateTimeEvent(server->el, 1000, ServerCron, NULL, NULL);
+  server->cron_loops = 0;
+  AeCreateTimeEvent(server->el, 1000, ServerCron, server, NULL);
 }
 
 int ServerStart(CutisServer *server) {
@@ -63,6 +72,27 @@ int ServerStart(CutisServer *server) {
   return CUTIS_OK;
 }
 
+void CloseTimeoutClients(CutisServer *server) {
+  ListIter *li;
+  ListNode *ln;
+  CutisClient *c;
+  time_t now = time(NULL);
+
+  li = listGetIterator(server->clients, AL_START_HEAD);
+  if (!li) {
+    return;
+  }
+
+  while ((ln = listNextElement(li)) != NULL) {
+    c = listNodeValue(ln);
+    if ((now - c->last_interaction) > server->max_idle_time) {
+      CutisLog(CUTIS_DEBUG, "Closing idle client");
+      FreeClient(c);
+    }
+  }
+  listReleaseIterator(li);
+}
+
 static void interrupt_handler(int sig) {
   CUTIS_NOT_USED(sig);
   CutisLog(CUTIS_WARNING, "catch interrupt signal");
@@ -71,11 +101,22 @@ static void interrupt_handler(int sig) {
 
 static int ServerCron(struct AeEventLoop *event_loop,
                       long long id, void *client_data) {
+  CutisServer *server = (CutisServer *)client_data;
+  int loops = server->cron_loops++;
   CUTIS_NOT_USED(event_loop);
   CUTIS_NOT_USED(id);
   CUTIS_NOT_USED(client_data);
 
-  CutisLog(CUTIS_DEBUG, "memory used: %zu", zmalloc_used_memory());
+  // Show information about memory used and connected clients
+  if (loops % 5 == 0) {
+    CutisLog(CUTIS_DEBUG, "%d clients connected, %zu bytes in use",
+             listLength(server->clients), zmalloc_used_memory());
+  }
+
+  // Close connections of timeout clients
+  if (loops % 10 == 0) {
+    CloseTimeoutClients(server);
+  }
 
   return 1000;
 }
@@ -85,7 +126,7 @@ static int AcceptHandler(AeEventLoop *event_loop, int fd,
   int cfd;
   int cport;
   char cip[128];
-  CutisServer *server = (CutisServer*)client_data;
+  CutisServer *server = (CutisServer *)client_data;
 
   CUTIS_NOT_USED(event_loop);
   CUTIS_NOT_USED(mask);
