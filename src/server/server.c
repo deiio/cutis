@@ -69,7 +69,7 @@ void InitServer(CutisServer *server) {
   AeCreateTimeEvent(server->el, 1000, ServerCron, server, NULL);
 }
 
-int LogServerConfig(CutisServer *server, const char *filename) {
+int LoadServerConfig(CutisServer *server, const char *filename) {
   FILE *fp = fopen(filename, "r");
   char buf[CUTIS_CONFIG_LINE_MAX + 1];
   sds err = NULL;
@@ -170,14 +170,46 @@ int LogServerConfig(CutisServer *server, const char *filename) {
   }
 }
 
-int ServerStart(CutisServer *server) {
+int StartServer(CutisServer *server) {
   if (AeCreateFileEvent(server->el, server->fd, AE_READABLE,
                         AcceptHandler, server, NULL) == AE_ERR) {
     CutisOom("creating file event");
   }
   CutisLog(CUTIS_NOTICE, "The server is now ready to accept connections");
   AeMain(server->el);
+  return CUTIS_OK;
+}
+
+int CleanServer(CutisServer *server) {
+  ListIter *li;
+  ListNode *ln;
+  size_t used_size = 0;
+
+  CutisLog(CUTIS_NOTICE, "Clean up server");
+
+  // Release clients
+  li = listGetIterator(server->clients, AL_START_HEAD);
+  if (li != NULL) {
+    while ((ln = listNextElement(li)) != NULL) {
+      FreeClient(listNodeValue(ln));
+    }
+  }
+  listReleaseIterator(li);
+  listRelease(server->clients);
+
   AeDeleteEventLoop(server->el);
+
+  if (server->log_file != NULL) {
+    used_size = sizeof(size_t) + strlen(server->log_file) + 1;
+  }
+  CutisLog(CUTIS_DEBUG, "After clean up %zu bytes in use. "
+                        "(include %zu bytes for log filename)",
+           zmalloc_used_memory(), used_size);
+
+  if (server->log_file != NULL) {
+    zfree(server->log_file);
+  }
+
   return CUTIS_OK;
 }
 
