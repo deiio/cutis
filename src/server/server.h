@@ -10,11 +10,6 @@
 #include "event/ae.h"
 #include "net/anet.h"
 
-
-// Static server configuration
-#define CUTIS_SERVER_PORT   6380      // TCP port
-#define CUTIS_MAX_IDLE_TIME (60 * 5)  // default client timeout
-
 // Error codes
 #define CUTIS_OK            0
 #define CUTIS_ERR           -1
@@ -40,6 +35,7 @@ typedef struct CutisServer {
 CutisServer *GetSingletonServer();
 void InitServerConfig(CutisServer *server);
 void InitServer(CutisServer *server);
+int LogServerConfig(CutisServer *server, const char *filename);
 int ServerStart(CutisServer *server);
 void CloseTimeoutClients(CutisServer *server);
 

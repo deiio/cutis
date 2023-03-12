@@ -160,7 +160,7 @@ sds sdscatprintf(sds s, const char *fmt, ...) {
     va_end(ap);
     if (len > 0 && (size_t)len >= buflen) {
       zfree(buf);
-      buflen = len;
+      buflen = len + 1;
       continue;
     }
     break;
