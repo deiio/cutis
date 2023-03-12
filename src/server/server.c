@@ -5,8 +5,11 @@
 
 #include "server/server.h"
 
+#include <errno.h>
 #include <signal.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -16,6 +19,11 @@
 
 // Anti-warning macro
 #define CUTIS_NOT_USED(v) (void)(v)
+
+// Static server configuration
+#define CUTIS_SERVER_PORT     6380      // TCP port
+#define CUTIS_MAX_IDLE_TIME   (60 * 5)  // default client timeout
+#define CUTIS_CONFIG_LINE_MAX 1024      // maximum characters for one line
 
 // Static functions
 static void interrupt_handler(int sig);
@@ -59,6 +67,107 @@ void InitServer(CutisServer *server) {
   }
   server->cron_loops = 0;
   AeCreateTimeEvent(server->el, 1000, ServerCron, server, NULL);
+}
+
+int LogServerConfig(CutisServer *server, const char *filename) {
+  FILE *fp = fopen(filename, "r");
+  char buf[CUTIS_CONFIG_LINE_MAX + 1];
+  sds err = NULL;
+  int line_num = 0;
+  sds line = NULL;
+  sds *argv;
+  int argc;
+
+  if (!fp) {
+    CutisLog(CUTIS_WARNING, "Fatal error, can't open config file");
+    return CUTIS_ERR;
+  }
+
+  while (fgets(buf, sizeof(buf), fp) != NULL) {
+    int j;
+
+    line_num++;
+    line = sdsnew(buf);
+    line = sdstrim(line, " \t\r\n");
+
+    // Skip comments and blank lines
+    if (line[0] == '#' || line[0] == '\0') {
+      sdsfree(line);
+      continue;
+    }
+
+    // Split into arguments
+    argv = sdssplitlen(line, sdslen(line), " ", 1, &argc);
+    sdstolower(argv[0]);
+
+    // Execute config directives
+    if (strcmp(argv[0], "port") == 0 && argc == 2) {
+      server->port = atoi(argv[1]);
+      if (server->port < 1 || server->port > 65535) {
+        err = sdsnew("Invalid port");
+        break;
+      }
+    } else if (strcmp(argv[0], "loglevel") == 0 && argc == 2) {
+      if (strcmp(argv[1], "debug") == 0) {
+        server->verbosity = CUTIS_DEBUG;
+      } else if (strcmp(argv[1], "notice") ==0 ) {
+        server->verbosity = CUTIS_NOTICE;
+      } else if (strcmp(argv[1], "warning") == 0) {
+        server->verbosity = CUTIS_WARNING;
+      } else {
+        err = sdsnew("Invalid log level. "
+                     "Must be one of debug, notice, warning");
+        break;
+      }
+    } else if (strcmp(argv[0], "logfile") == 0 && argc == 2) {
+      server->log_file = zstrdup(argv[1]);
+      if (strcmp(server->log_file, "stdout") == 0) {
+        zfree(server->log_file);
+        server->log_file = NULL;
+      }
+
+      if (server->log_file) {
+        // Test if we are able to open the file. The server will not be able
+        // to abort just for this problem later...
+        FILE *log = fopen(server->log_file, "a");
+        if (log == NULL) {
+          err = sdscatprintf(sdsempty(), "Can't open the log file: %s",
+                             strerror(errno));
+          break;
+        }
+        fclose(log);
+      }
+    } else {
+      err = sdsnew("Bad directive or wrong number of arguments");
+      break;
+    }
+
+    for (j = 0; j < argc; j++) {
+      sdsfree(argv[j]);
+    }
+    zfree(argv);
+    sdsfree(line);
+  }
+
+  fclose(fp);
+  if (err == NULL) {
+    return CUTIS_OK;
+  } else {
+    int j;
+
+    fprintf(stderr, "\n*** FATAL CONFIG FILE ERROR ***\n");
+    fprintf(stderr, "Reading the configuration file, at line %d\n", line_num);
+    fprintf(stderr, ">>> '%s'\n", line);
+    fprintf(stderr, "%s\n", err);
+
+    for (j = 0; j < argc; j++) {
+      sdsfree(argv[j]);
+    }
+    zfree(argv);
+    sdsfree(line);
+    sdsfree(err);
+    return CUTIS_ERR;
+  }
 }
 
 int ServerStart(CutisServer *server) {

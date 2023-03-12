@@ -44,13 +44,6 @@ memory/zmalloc.o: memory/zmalloc.c memory/zmalloc.h
 
 net/anet.o: net/anet.c net/anet.h
 
-server/server.o: server/server.c server/server.h \
-                 data_struct/adlist.h            \
-                 event/ae.h                      \
-                 memory/zmalloc.h                \
-                 net/anet.h                      \
-                 server/client.h                 \
-                 utils/log.h
 server/client.o: server/client.c server/client.h \
                  data_struct/adlist.h            \
                  data_struct/sds.h               \
@@ -58,6 +51,14 @@ server/client.o: server/client.c server/client.h \
                  memory/zmalloc.h                \
                  net/anet.h                      \
                  server/server.h                 \
+                 utils/log.h
+
+server/server.o: server/server.c server/server.h \
+                 data_struct/adlist.h            \
+                 event/ae.h                      \
+                 memory/zmalloc.h                \
+                 net/anet.h                      \
+                 server/client.h                 \
                  utils/log.h
 
 utils/log.o: utils/log.c utils/log.h \
