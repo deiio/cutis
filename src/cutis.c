@@ -13,14 +13,20 @@ int main(int argc, char *argv[]) {
   CutisServer *server = GetSingletonServer();
   InitServerConfig(server);
   if (argc == 2) {
-    if (LogServerConfig(server, argv[1]) == CUTIS_ERR) {
+    if (LoadServerConfig(server, argv[1]) == CUTIS_ERR) {
       return 1;
     }
   } else if (argc > 2) {
     fprintf(stderr, "Usage: %s [/path/to/cutis.conf]\n", argv[0]);
     return 1;
   }
+
   InitServer(server);
   CutisLog(CUTIS_NOTICE, "Server started, Cutis version " CUTIS_VERSION);
-  return ServerStart(server);
+  if (StartServer(server) != CUTIS_OK) {
+    CutisLog(CUTIS_WARNING, "Server started failed");
+  }
+  CleanServer(server);
+
+  return 0;
 }

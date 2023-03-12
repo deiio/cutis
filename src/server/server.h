@@ -35,8 +35,9 @@ typedef struct CutisServer {
 CutisServer *GetSingletonServer();
 void InitServerConfig(CutisServer *server);
 void InitServer(CutisServer *server);
-int LogServerConfig(CutisServer *server, const char *filename);
-int ServerStart(CutisServer *server);
+int LoadServerConfig(CutisServer *server, const char *filename);
+int StartServer(CutisServer *server);
+int CleanServer(CutisServer *server);
 void CloseTimeoutClients(CutisServer *server);
 
 #endif  // SERVER_SERVER_H_
