@@ -6,14 +6,22 @@
 #ifndef COMMANDS_COMMAND_H_
 #define COMMANDS_COMMAND_H_
 
+#include "commands/object.h"
+
+#define CUTIS_CMD_BULK    1
+#define CUTIS_CMD_INLINE  0
+
 typedef struct CutisClient CutisClient;
 
-// A cutis object, that holds a string
-typedef struct CutisObject {
-  void *ptr;
-} CutisObject;
+typedef void CutisCommandProc(CutisClient *c);
+typedef struct CutisCommand {
+    char *name;
+    CutisCommandProc *proc;
+    int arity;
+    int type;
+} CutisCommand;
 
-CutisObject *CreateCutisObject(int type, void *ptr);
 int ProcessCommand(CutisClient *c);
+CutisCommand *LookupCommand(const char *name);
 
 #endif  // COMMANDS_COMMAND_H_

@@ -77,12 +77,23 @@ void ResetClient(CutisClient *c) {
   c->bulk_len = -1;
 }
 
-int AddReply(CutisClient *c) {
-  if (AeCreateFileEvent(c->server->el, c->fd, AE_WRITABLE,
+int AddReply(CutisClient *c, CutisObject *o) {
+  if (listLength(c->reply) == 0 &&
+      AeCreateFileEvent(c->server->el, c->fd, AE_WRITABLE,
                         SendReplyToClient, c, NULL) == AE_ERR) {
     return AE_ERR;
   }
+
+  if (listAddNodeTail(c->reply, o) == NULL) {
+    CutisOom("listAddNodeTail");
+  }
+
   return AE_OK;
+}
+
+int AddReplySds(CutisClient *c, sds s) {
+  CutisObject *o = CreateCutisObject(0, s);
+  return AddReply(c, o);
 }
 
 int ParseQuery(CutisClient *c) {

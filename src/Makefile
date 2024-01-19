@@ -8,6 +8,7 @@ CCOPT = $(CFLAGS)
 INCLUDES ?= -I.
 
 OBJ = commands/command.o    \
+      commands/object.o     \
       data_struct/adlist.o  \
       data_struct/dict.o    \
       data_struct/sds.o     \
@@ -24,9 +25,14 @@ PRGNAME = cutis-server
 all: cutis-server
 
 commands/command.o: commands/command.c commands/command.h \
+                    commands/object.h		              \
                     server/client.h                       \
                     memory/zmalloc.h                      \
                     utils/log.h
+
+commands/object.o: commands/object.c commands/object.h \
+                   memory/zmalloc.h                    \
+                   utils/log.h
 
 data_struct/adlist.o: data_struct/adlist.c data_struct/adlist.h \
                       memory/zmalloc.h
@@ -45,6 +51,8 @@ memory/zmalloc.o: memory/zmalloc.c memory/zmalloc.h
 net/anet.o: net/anet.c net/anet.h
 
 server/client.o: server/client.c server/client.h \
+                 commands/command.h              \
+                 commands/object.h               \
                  data_struct/adlist.h            \
                  data_struct/sds.h               \
                  event/ae.h                      \

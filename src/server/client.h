@@ -7,6 +7,7 @@
 #define SERVER_CLIENT_H_
 
 #include "commands/command.h"
+#include "commands/object.h"
 #include "data_struct/adlist.h"
 #include "data_struct/sds.h"
 
@@ -36,7 +37,8 @@ typedef struct CutisClient {
 CutisClient *CreateClient(CutisServer *server, int fd);
 void FreeClient(CutisClient *c);
 void ResetClient(CutisClient *c);
-int AddReply(CutisClient *c);
+int AddReply(CutisClient *c, CutisObject *o);
+int AddReplySds(CutisClient *c, sds s);
 int ParseQuery(CutisClient *c);
 int ParseBulkQuery(CutisClient *c);
 int ParseNonBulkQuery(CutisClient *c);
