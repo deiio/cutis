@@ -18,7 +18,7 @@ static void sdsOOMAbort() {
   abort();
 }
 
-static sds sdsMakeRoorFor(sds s, size_t addlen) {
+static sds sdsMakeRoomFor(sds s, size_t addlen) {
   sds_hdr *sh, *newsh;
   size_t free = sdsavail(s);
   size_t len, newlen;
@@ -100,7 +100,7 @@ sds sdscatlen(sds s, void *t, size_t len) {
   sds_hdr *sh;
   size_t curlen = sdslen(s);
 
-  s = sdsMakeRoorFor(s, len);
+  s = sdsMakeRoomFor(s, len);
   if (s == NULL) {
     return NULL;
   }
@@ -121,7 +121,7 @@ sds sdscpylen(sds s, char *t, size_t len) {
   size_t totlen = sh->free + sh->len;
 
   if (totlen < len) {
-    s = sdsMakeRoorFor(s, len - totlen);
+    s = sdsMakeRoomFor(s, len - totlen);
     if (s == NULL) {
       return NULL;
     }
@@ -274,12 +274,15 @@ sds *sdssplitlen(char *s, int len, char *sep, int seplen, int *count) {
   sds *tokens = zmalloc(sizeof(sds) * slots);
   int clean_up = 0;
 
+  if (seplen < 1 || len < 0) {
+    return NULL;
+  }
 #ifdef SDS_ABORT_ON_OOM
   if (tokens == NULL) {
     sdsOOMAbort();
   }
 #endif
-  if (seplen < 1 || len < 0 || tokens == NULL) {
+  if (tokens == NULL) {
     return NULL;
   }
   for (j = 0; j < (len - (seplen - 1)); j++) {

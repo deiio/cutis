@@ -246,7 +246,6 @@ static int ServerCron(struct AeEventLoop *event_loop,
   int loops = server->cron_loops++;
   CUTIS_NOT_USED(event_loop);
   CUTIS_NOT_USED(id);
-  CUTIS_NOT_USED(client_data);
 
   // Show information about memory used and connected clients
   if (loops % 5 == 0) {

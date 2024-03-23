@@ -65,8 +65,7 @@ static int anetTcpGenericConnect(char *err, char *addr, int port, int flags) {
   }
 
   if (connect(s, (struct sockaddr*)&sa, sizeof(sa)) == -1) {
-    if (errno == EINPROGRESS &&
-        flags & ANET_CONNECT_NONBLOCK) {
+    if (errno == EINPROGRESS && flags & ANET_CONNECT_NONBLOCK) {
       return s;
     }
     anetSetError(err, "connect: %s\n", strerror(errno));
@@ -86,7 +85,7 @@ int anetTcpNonBlockConnect(char *err, char *addr, int port) {
 }
 
 // Like read(2) but make sure 'count' is read before to return
-// (unless error or EOF condition is encountered.
+// (unless error or EOF condition is encountered)
 int anetRead(int fd, void *buf, int count) {
   int nread = 0;
   int total_len = 0;

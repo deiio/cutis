@@ -594,7 +594,7 @@ DictType DictTypeHeapStringCopyKey = {
 };
 
 // This is like StringCopy but does not auto-duplicate the key.
-// It's used for intepreter's shared strings.
+// It's used for interpreter's shared strings.
 DictType DictTypeHeapStrings = {
     _DictStringCopyHTHashFunction,  // hash function
     NULL,                           // key dup

@@ -19,7 +19,7 @@
 typedef struct CutisServer {
   int port;                   // listen port
   int fd;                     // listen fd
-  int cron_loops;             // number of times the cron function fun
+  int cron_loops;             // number of times the cron function run
   List *clients;              // connected clients list
   AeEventLoop *el;            // event loop
   char neterr[ANET_ERR_LEN];  // network error message
