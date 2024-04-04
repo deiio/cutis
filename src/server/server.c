@@ -68,6 +68,7 @@ void InitServerConfig(CutisServer *server) {
 }
 
 void InitServer(CutisServer *server) {
+  int i;
   signal(SIGPIPE, SIG_IGN);
   signal(SIGHUP, SIG_IGN);
   signal(SIGINT, &interrupt_handler);
@@ -85,7 +86,7 @@ void InitServer(CutisServer *server) {
     CutisLog(CUTIS_WARNING, "Opening TCP port: %s", server->neterr);
     exit(1);
   }
-  for (int i = 0; i < server->db_num; i++) {
+  for (i = 0; i < server->db_num; i++) {
     server->dict[i] = DictCreate(&sdsDictType, NULL);
     if (!server->dict[i]) {
       CutisOom("server initialization");
