@@ -8,6 +8,7 @@ CCOPT = $(CFLAGS)
 INCLUDES ?= -I.
 
 OBJ = commands/command.o    \
+	  commands/object.o     \
       data_struct/adlist.o  \
       data_struct/dict.o    \
       data_struct/sds.o     \
@@ -27,6 +28,12 @@ commands/command.o: commands/command.c commands/command.h \
                     server/client.h                       \
                     memory/zmalloc.h                      \
                     utils/log.h
+
+commands/object.o: commands/object.c commands/object.h \
+                   data_struct/sds.h                   \
+                   memory/zmalloc.h					   \
+                   server/server.h					   \
+                   utils/log.h
 
 data_struct/adlist.o: data_struct/adlist.c data_struct/adlist.h \
                       memory/zmalloc.h

@@ -5,110 +5,19 @@
 
 #include "commands/command.h"
 
-#include <assert.h>
 #include <string.h>
 #include <stdlib.h>
 
+#include "commands/object.h"
 #include "memory/zmalloc.h"
 #include "server/client.h"
 #include "server/server.h"
-#include "utils/log.h"
 
 static CutisCommand cmdTable[] = {
     {"get", GetCommand, 2, CUTIS_CMD_INLINE},
     {"set", SetCommand, 3, CUTIS_CMD_BULK},
     {NULL, NULL, 0, 0},
 };
-
-struct SharedObject {
-  CutisObject *crlf;
-  CutisObject *ok;
-  CutisObject *err;
-  CutisObject *zerobulk;
-  CutisObject *nil;
-  CutisObject *zero;
-  CutisObject *one;
-  CutisObject *pong;
-} shared;
-
-CutisObject *CreateCutisObject(int type, void *ptr) {
-  CutisObject *o = NULL;
-  CutisServer *s = GetSingletonServer();
-  if (listLength(s->free_objs)) {
-    ListNode *head = listFirst(s->free_objs);
-    o = listNodeValue(head);
-    listDelNode(s->free_objs, head);
-  } else {
-    o = zmalloc(sizeof(CutisObject));
-  }
-  if (o == NULL) {
-    CutisOom("CreateCutisObject");
-  }
-
-  o->ptr = ptr;
-  o->type = type;
-  o->refcount = 1;
-  return o;
-}
-
-CutisObject *CreateListObject() {
-  List *l = listCreate();
-  if (!l) {
-    CutisOom("CreateListObject");
-  }
-  listSetFreeMethod(l, (void(*)(void*))(&DecrRefCount));
-  return CreateCutisObject(CUTIS_LIST, l);
-}
-
-void FreeStringObject(CutisObject *o) {
-  sdsfree(o->ptr);
-}
-
-void FreeListObject(CutisObject *o) {
-  listRelease(o->ptr);
-}
-
-void FreeSetObject(CutisObject *o) {
-  // TODO
-}
-
-void IncrRefCount(CutisObject *o) {
-  o->refcount++;
-}
-
-void DecrRefCount(CutisObject *o) {
-  if (--(o->refcount) == 0) {
-    CutisServer *s = GetSingletonServer();
-    switch (o->type) {
-    case CUTIS_STRING:
-      FreeStringObject(o);
-      break;
-    case CUTIS_LIST:
-      FreeListObject(o);
-      break;
-    case CUTIS_SET:
-      FreeSetObject(o);
-      break;
-    default:
-      assert(0);
-      break;
-    }
-    if (!listAddNodeHead(s->free_objs, o)) {
-      zfree(o);
-    }
-  }
-}
-
-void InitSharedObjects() {
-  shared.crlf = CreateCutisObject(CUTIS_STRING, sdsnew("\r\n"));
-  shared.ok = CreateCutisObject(CUTIS_STRING, sdsnew("+OK\r\n"));
-  shared.err = CreateCutisObject(CUTIS_STRING, sdsnew("-ERR\r\n"));
-  shared.zerobulk = CreateCutisObject(CUTIS_STRING, sdsnew("0\r\n\r\n"));
-  shared.nil = CreateCutisObject(CUTIS_STRING, sdsnew("nil\r\n"));
-  shared.zero = CreateCutisObject(CUTIS_STRING, sdsnew("0\r\n"));
-  shared.one = CreateCutisObject(CUTIS_STRING, sdsnew("1\r\n"));
-  shared.pong = CreateCutisObject(CUTIS_STRING, sdsnew("+PONG\r\n"));
-}
 
 int ProcessCommand(CutisClient *c) {
   sdstolower(c->argv[0]);

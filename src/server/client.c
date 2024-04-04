@@ -10,6 +10,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "commands/object.h"
 #include "event/ae.h"
 #include "memory/zmalloc.h"
 #include "net/anet.h"
