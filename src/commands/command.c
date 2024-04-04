@@ -191,7 +191,6 @@ static void SetGenericCommand(CutisClient *c, int nx) {
 }
 
 void GetCommand(CutisClient *c) {
-  CutisLog(CUTIS_DEBUG, "%s", __func__);
   DictEntry *de = DictFind(c->dict, c->argv[1]);
   if (de == NULL) {
     AddReply(c, shared.nil);
@@ -210,6 +209,5 @@ void GetCommand(CutisClient *c) {
 }
 
 void SetCommand(CutisClient *c) {
-  CutisLog(CUTIS_DEBUG, "%s", __func__);
   return SetGenericCommand(c, 0);
 }
