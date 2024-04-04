@@ -23,6 +23,7 @@
 // Static server configuration
 #define CUTIS_SERVER_PORT     6380      // TCP port
 #define CUTIS_MAX_IDLE_TIME   (60 * 5)  // default client timeout
+#define CUTIS_DEFAULT_DBNUM   16        // database number
 #define CUTIS_CONFIG_LINE_MAX 1024      // maximum characters for one line
 
 // Static functions
@@ -31,6 +32,21 @@ static int ServerCron(struct AeEventLoop *event_loop,
                       long long id, void *client_data);
 static int AcceptHandler(AeEventLoop *event_loop, int fd,
                          void *client_data, int mask);
+static unsigned int sdsDictHashFunction(const void *key);
+static int sdsDictKeyCompare(void *priv_data, const void *key1,
+                             const void *key2);
+static void sdsDictKeyDestructor(void *priv_data, void *val);
+static void sdsDictValDestructor(void *priv_data, void *val);
+
+
+DictType sdsDictType = {
+    sdsDictHashFunction,
+    NULL,
+    NULL,
+    sdsDictKeyCompare,
+    sdsDictKeyDestructor,
+    sdsDictValDestructor,
+};
 
 // Implement interface
 
@@ -40,6 +56,7 @@ CutisServer *GetSingletonServer() {
 }
 
 void InitServerConfig(CutisServer *server) {
+  server->db_num = CUTIS_DEFAULT_DBNUM;
   server->port = CUTIS_SERVER_PORT;
   server->el = NULL;
   server->fd = -1;
@@ -56,8 +73,11 @@ void InitServer(CutisServer *server) {
   signal(SIGINT, &interrupt_handler);
 
   server->clients = listCreate();
+  server->free_objs = listCreate();
+  InitSharedObjects();
   server->el = AeCreateEventLoop();
-  if (!server->clients) {
+  server->dict = zmalloc(sizeof(Dict*) * server->db_num);
+  if (!server->clients || !server->free_objs || !server->dict) {
     CutisOom("server initialization");
   }
   server->fd = anetTcpServer(server->neterr, server->port, server->bind_addr);
@@ -65,7 +85,15 @@ void InitServer(CutisServer *server) {
     CutisLog(CUTIS_WARNING, "Opening TCP port: %s", server->neterr);
     exit(1);
   }
+  for (int i = 0; i < server->db_num; i++) {
+    server->dict[i] = DictCreate(&sdsDictType, NULL);
+    if (!server->dict[i]) {
+      CutisOom("server initialization");
+    }
+  }
+
   server->cron_loops = 0;
+  server->dirty = 0;
   AeCreateTimeEvent(server->el, 1000, ServerCron, server, NULL);
 }
 
@@ -196,6 +224,7 @@ int CleanServer(CutisServer *server) {
   }
   listReleaseIterator(li);
   listRelease(server->clients);
+  listRelease(server->free_objs);
 
   AeDeleteEventLoop(server->el);
 
@@ -249,8 +278,9 @@ static int ServerCron(struct AeEventLoop *event_loop,
 
   // Show information about memory used and connected clients
   if (loops % 5 == 0) {
-    CutisLog(CUTIS_DEBUG, "%d clients connected, %zu bytes in use",
-             listLength(server->clients), zmalloc_used_memory());
+    CutisLog(CUTIS_DEBUG, "%d clients connected, %lld dirty, "
+                          "%zu bytes in use", listLength(server->clients),
+             server->dirty, zmalloc_used_memory());
   }
 
   // Close connections of timeout clients
@@ -284,4 +314,24 @@ static int AcceptHandler(AeEventLoop *event_loop, int fd,
   }
 
   return ANET_OK;
+}
+
+static unsigned int sdsDictHashFunction(const void *key) {
+  return DictGenHashFunction(key, sdslen((sds)key));
+}
+
+static int sdsDictKeyCompare(void *priv_data, const void *key1,
+                             const void *key2) {
+  CUTIS_NOT_USED(priv_data);
+  return sdscmp((sds)key1, (sds)key2) == 0;
+}
+
+static void sdsDictKeyDestructor(void *priv_data, void *val) {
+  CUTIS_NOT_USED(priv_data);
+  sdsfree(val);
+}
+
+static void sdsDictValDestructor(void *priv_data, void *val) {
+  CUTIS_NOT_USED(priv_data);
+  DecrRefCount(val);
 }

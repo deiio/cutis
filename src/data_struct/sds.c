@@ -219,7 +219,7 @@ sds sdsrange(sds s, long start, long end) {
       start = len - 1;
     }
     if (end >= (long)len) {
-      end = end - 1;
+      end = len - 1;
     }
     newlen = (start > end) ? 0 : (end - start) + 1;
   } else {

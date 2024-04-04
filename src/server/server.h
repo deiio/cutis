@@ -7,6 +7,7 @@
 #define SERVER_SERVER_H_
 
 #include "data_struct/adlist.h"
+#include "data_struct/dict.h"
 #include "event/ae.h"
 #include "net/anet.h"
 
@@ -20,15 +21,19 @@ typedef struct CutisServer {
   int port;                   // listen port
   int fd;                     // listen fd
   int cron_loops;             // number of times the cron function run
+  long long dirty;            // changes to DB form the last save
   List *clients;              // connected clients list
   AeEventLoop *el;            // event loop
   char neterr[ANET_ERR_LEN];  // network error message
+  List *free_objs;            // a list of freed objects to avoid malloc
+  Dict **dict;                // each dict corresponds to a database
 
   // Configuration
   char *bind_addr;            // band address
   char *log_file;             // log file
   int verbosity;              // log level
   int max_idle_time;          // client's maximum idle time (second)
+  int db_num;                 // db number
 } CutisServer;
 
 

@@ -8,6 +8,7 @@
 
 #include "commands/command.h"
 #include "data_struct/adlist.h"
+#include "data_struct/dict.h"
 #include "data_struct/sds.h"
 
 #include <time.h>
@@ -26,9 +27,10 @@ typedef struct CutisClient {
   List *reply;                        // reply message
   int sent_len;                       // sent length for first element in reply
   time_t last_interaction;            // used for timeout
-  CutisObject *argv[CUTIS_MAX_ARGS];  // arguments array
+  sds argv[CUTIS_MAX_ARGS];           // arguments array
   int argc;                           // arguments count
   int bulk_len;                       // bulk read len. -1 single read mode
+  Dict *dict;                         // database's dict
   CutisServer *server;                // pointed to the server
 } CutisClient;
 
@@ -36,9 +38,12 @@ typedef struct CutisClient {
 CutisClient *CreateClient(CutisServer *server, int fd);
 void FreeClient(CutisClient *c);
 void ResetClient(CutisClient *c);
-int AddReply(CutisClient *c);
+int AddReply(CutisClient *c, CutisObject* o);
+int AddReplySds(CutisClient *c, sds s);
 int ParseQuery(CutisClient *c);
 int ParseBulkQuery(CutisClient *c);
 int ParseNonBulkQuery(CutisClient *c);
+
+int SelectDB(CutisClient *c, int id);
 
 #endif  // SERVER_CLIENT_H_

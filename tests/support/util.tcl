@@ -1,3 +1,7 @@
+#
+# Copyright (c) 2023 furzoom.com, All rights reserved.
+# Author: mn, mn@furzoom.com
+
 # Test if TERM looks like to support colors
 proc color_term {} {
     expr {[info exists ::env(TERM)] && [string match *xterm* $::env(TERM)]}

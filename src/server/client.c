@@ -39,9 +39,12 @@ CutisClient *CreateClient(CutisServer *server, int fd) {
   c->sent_len = 0;
   c->server = server;
 
+  SelectDB(c, 0);
+
   if ((c->reply = listCreate()) == NULL) {
     CutisOom("listCreate");
   }
+  listSetFreeMethod(c->reply, (void(*)(void*))DecrRefCount);
 
   if (AeCreateFileEvent(server->el, c->fd, AE_READABLE, ReadQueryFromClient,
                         c, NULL) == AE_ERR) {
@@ -77,12 +80,25 @@ void ResetClient(CutisClient *c) {
   c->bulk_len = -1;
 }
 
-int AddReply(CutisClient *c) {
-  if (AeCreateFileEvent(c->server->el, c->fd, AE_WRITABLE,
+int AddReply(CutisClient *c, CutisObject* o) {
+  if (listLength(c->reply) == 0 &&
+      AeCreateFileEvent(c->server->el, c->fd,AE_WRITABLE,
                         SendReplyToClient, c, NULL) == AE_ERR) {
+    FreeClientArgv(c);
     return AE_ERR;
   }
+  if (!listAddNodeTail(c->reply, o)) {
+    CutisOom("listAddNodeTail");
+  }
+  IncrRefCount(o);
   return AE_OK;
+}
+
+int AddReplySds(CutisClient *c, sds s) {
+  CutisObject *o = CreateCutisObject(CUTIS_STRING, s);
+  int ret = AddReply(c, o);
+  DecrRefCount(o);
+  return ret;
 }
 
 int ParseQuery(CutisClient *c) {
@@ -105,8 +121,8 @@ int ParseBulkQuery(CutisClient *c) {
   int bulk_len = sdslen(c->query_buf);
   if (c->bulk_len <= bulk_len) {
     // Copy everything but the final CRLF as final argument
-    sds d = sdsrange(c->query_buf, 0, c->bulk_len - 2);
-    c->argv[c->argc] = CreateCutisObject(0, d);
+    sds d = sdsnewlen(c->query_buf, c->bulk_len - 2);
+    c->argv[c->argc] = d;
     c->argc++;
     c->query_buf = sdsrange(c->query_buf, c->bulk_len, -1);
     // Execute the command. If the client is still valid after
@@ -159,7 +175,7 @@ int ParseNonBulkQuery(CutisClient *c) {
 
     for (i = 0; i < argc && c->argc < CUTIS_MAX_ARGS; i++) {
       if (sdslen(argv[i]) > 0) {
-        c->argv[c->argc] = CreateCutisObject(0, argv[i]);
+        c->argv[c->argc] = argv[i];
         c->argc++;
       } else {
         sdsfree(argv[i]);
@@ -222,16 +238,15 @@ static int SendReplyToClient(AeEventLoop *event_loop, int fd,
 
   while (listLength(c->reply)) {
     CutisObject *o = listNodeValue(listFirst(c->reply));
-    int len = sdslen(o->ptr);
+    sds msg = o->ptr;
+    int len = sdslen(msg);
 
     if (len == 0) {
-      sdsfree(o->ptr);
-      zfree(o);
       listDelNode(c->reply, listFirst(c->reply));
       continue;
     }
 
-    nwritten = write(c->fd, o->ptr + c->sent_len, len - c->sent_len);
+    nwritten = write(c->fd, msg + c->sent_len, len - c->sent_len);
     if (nwritten <= 0) {
       break;
     }
@@ -240,8 +255,6 @@ static int SendReplyToClient(AeEventLoop *event_loop, int fd,
     total_written += nwritten;
     c->sent_len += nwritten;
     if (c->sent_len == len) {
-      sdsfree(o->ptr);
-      zfree(o);
       listDelNode(c->reply, listFirst(c->reply));
       c->sent_len = 0;
     }
@@ -272,8 +285,15 @@ static int SendReplyToClient(AeEventLoop *event_loop, int fd,
 static void FreeClientArgv(CutisClient *c) {
   int i;
   for (i = 0; i < c->argc; i++) {
-    sdsfree(c->argv[i]->ptr);
-    zfree(c->argv[i]);
+    sdsfree(c->argv[i]);
   }
   c->argc = 0;
+}
+
+int SelectDB(CutisClient *c, int id) {
+  if (id < 0 || id >= c->server->db_num) {
+    return CUTIS_ERR;
+  }
+  c->dict = c->server->dict[id];
+  return CUTIS_OK;
 }
