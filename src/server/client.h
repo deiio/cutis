@@ -7,6 +7,7 @@
 #define SERVER_CLIENT_H_
 
 #include "commands/command.h"
+#include "commands/object.h"
 #include "data_struct/adlist.h"
 #include "data_struct/dict.h"
 #include "data_struct/sds.h"
