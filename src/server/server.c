@@ -28,6 +28,8 @@
 #define CUTIS_CONFIG_LINE_MAX 1024      // maximum characters for one line
 #define CUTIS_LOAD_BUF_LEN    1024      // default load DB buffer size
 
+#define CUTIS_HT_MINFILL      10        // Minimal hash table fill 10%
+#define CUTIS_HT_MINSLOTS     16384     // Never resize the HT under this
 #define CUTIS_TMP_FILENAME    "dump-%d.%ld.cdb"
 #define CUTIS_DB_SIGNATURE    "CUTIS0000"
 #define CUTIS_SELECT_DB       254
@@ -39,6 +41,8 @@ static int ServerCron(struct AeEventLoop *event_loop,
                       long long id, void *client_data);
 static int AcceptHandler(AeEventLoop *event_loop, int fd,
                          void *client_data, int mask);
+
+// DictType functions
 static unsigned int sdsDictHashFunction(const void *key);
 static int sdsDictKeyCompare(void *priv_data, const void *key1,
                              const void *key2);
@@ -72,6 +76,14 @@ void InitServerConfig(CutisServer *server) {
   server->log_file = NULL;
   server->verbosity = CUTIS_DEBUG;
   server->max_idle_time = CUTIS_MAX_IDLE_TIME;
+
+  ResetServerSaveParams(server);
+  // Save after 1 hour and 1 change
+  AppendServerSaveParams(server, 60 * 60, 1);
+  // Save after 5 minutes and 100 changes
+  AppendServerSaveParams(server, 300, 100);
+  // Save after 1 minute and 10000 changes
+  AppendServerSaveParams(server, 60, 10000);
 }
 
 void InitServer(CutisServer *server) {
@@ -608,10 +620,27 @@ static void interrupt_handler(int sig) {
 
 static int ServerCron(struct AeEventLoop *event_loop,
                       long long id, void *client_data) {
+  int j;
   CutisServer *server = (CutisServer *)client_data;
   int loops = server->cron_loops++;
   CUTIS_NOT_USED(event_loop);
   CUTIS_NOT_USED(id);
+
+  // If the percentage of used slots in the HT reaches CUTIS_HT_MINFILL
+  // we resize the hash table to save memory
+  for (j = 0; j < server->db_num; j++) {
+    unsigned size = DictGetHashTableSize(server->dict[j]);
+    unsigned used = DictGetHashTableUsed(server->dict[j]);
+    if (!(loops % 5) && used > 0) {
+      CutisLog(CUTIS_DEBUG, "DB %d: %u keys in %u slots HT", j, used, size);
+    }
+    if (size && used && size > CUTIS_HT_MINSLOTS &&
+        (used * 100 / size < CUTIS_HT_MINFILL)) {
+      CutisLog(CUTIS_NOTICE, "The hash table %d is to spares, resize it...", j);
+      DictResize(server->dict[j]);
+      CutisLog(CUTIS_NOTICE, "Hash table %d resized.", j);
+    }
+  }
 
   // Show information about memory used and connected clients
   if (loops % 5 == 0) {
@@ -625,8 +654,56 @@ static int ServerCron(struct AeEventLoop *event_loop,
     CloseTimeoutClients(server);
   }
 
+  // Check if a background saving in process terminated.
+  if (server->bg_saving) {
+    int status;
+    if (wait4(-1, &status, WNOHANG, NULL)) {
+      int exit_code = WEXITSTATUS(status);
+      if (exit_code == 0) {
+        CutisLog(CUTIS_NOTICE, "Background saving terminated with success");
+        server->dirty = 0;
+        server->last_save = time(NULL);
+      } else {
+        CutisLog(CUTIS_WARNING, "Background saving error");
+      }
+      server->bg_saving = 0;
+    }
+  } else {
+    // If there is not a background saving in progress check if
+    // we have to save now.
+    time_t now = time(NULL);
+    for (j = 0; j < server->save_param_len; j++) {
+      SaveParam *sp = server->save_params + j;
+      if (server->dirty >= sp->changes &&
+          now - server->last_save > sp->seconds) {
+        CutisLog(CUTIS_NOTICE, "%d change in %d seconds. Saving...",
+                 sp->changes, sp->seconds);
+        SaveDBBackground(server, CUTIS_DB_NAME);
+        break;
+      }
+    }
+  }
+
   return 1000;
 }
+
+void AppendServerSaveParams(CutisServer *server, time_t seconds, int changes) {
+  size_t size = sizeof(SaveParam) * (server->save_param_len + 1);
+  server->save_params = zrealloc(server->save_params,size);
+  if (server->save_params == NULL) {
+    CutisOom("AppendServerSaveParams");
+  }
+  server->save_params[server->save_param_len].seconds = seconds;
+  server->save_params[server->save_param_len].changes = changes;
+  server->save_param_len++;
+}
+
+void ResetServerSaveParams(CutisServer *server) {
+  zfree(server->save_params);
+  server->save_params = NULL;
+  server->save_param_len = 0;
+}
+
 
 static int AcceptHandler(AeEventLoop *event_loop, int fd,
                          void *client_data, int mask) {

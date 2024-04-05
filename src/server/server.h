@@ -20,6 +20,11 @@
 
 #define CUTIS_DB_NAME       "dump.cdb"
 
+typedef struct SaveParam {
+  time_t seconds;
+  int changes;
+} SaveParam;
+
 // Server state structure
 typedef struct CutisServer {
   int port;                   // listen port
@@ -34,6 +39,8 @@ typedef struct CutisServer {
 
   time_t last_save;           // the timestamp of last save DB
   int bg_saving;              // background saving in process?
+  int save_param_len;         // save_params's length
+  SaveParam *save_params;     // save DB rules
 
   // Configuration
   char *bind_addr;            // band address
@@ -54,5 +61,10 @@ void CloseTimeoutClients(CutisServer *server);
 int SaveDB(CutisServer *server, const char *filename);
 int SaveDBBackground(CutisServer *server, const char *filename);
 int LoadDB(CutisServer *server, const char *filename);
+
+// SaveParams
+void AppendServerSaveParams(CutisServer *server, time_t seconds, int changes);
+void ResetServerSaveParams(CutisServer *server);
+
 
 #endif  // SERVER_SERVER_H_
