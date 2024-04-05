@@ -5,6 +5,7 @@
 
 #include "server/server.h"
 
+#include <assert.h>
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
@@ -25,6 +26,12 @@
 #define CUTIS_MAX_IDLE_TIME   (60 * 5)  // default client timeout
 #define CUTIS_DEFAULT_DBNUM   16        // database number
 #define CUTIS_CONFIG_LINE_MAX 1024      // maximum characters for one line
+#define CUTIS_LOAD_BUF_LEN    1024      // default load DB buffer size
+
+#define CUTIS_TMP_FILENAME    "dump-%d.%ld.cdb"
+#define CUTIS_DB_SIGNATURE    "CUTIS0000"
+#define CUTIS_SELECT_DB       254
+#define CUTIS_EOF             255
 
 // Static functions
 static void interrupt_handler(int sig);
@@ -94,6 +101,8 @@ void InitServer(CutisServer *server) {
   }
 
   server->cron_loops = 0;
+  server->last_save = time(NULL);
+  server->bg_saving = 0;
   server->dirty = 0;
   AeCreateTimeEvent(server->el, 1000, ServerCron, server, NULL);
 }
@@ -213,6 +222,7 @@ int CleanServer(CutisServer *server) {
   ListIter *li;
   ListNode *ln;
   size_t used_size = 0;
+  int i;
 
   CutisLog(CUTIS_NOTICE, "Clean up server");
 
@@ -224,7 +234,22 @@ int CleanServer(CutisServer *server) {
     }
   }
   listReleaseIterator(li);
+
+  for (i = 0; i < server->db_num; i++) {
+    DictRelease(server->dict[i]);
+  }
+  zfree(server->dict);
+
+  ReleaseSharedObjects();
   listRelease(server->clients);
+
+  li = listGetIterator(server->free_objs, AL_START_HEAD);
+  if (li != NULL) {
+    while ((ln = listNextElement(li)) != NULL) {
+      ReleaseCutisObject(listNodeValue(ln));
+    }
+  }
+  listReleaseIterator(li);
   listRelease(server->free_objs);
 
   AeDeleteEventLoop(server->el);
@@ -262,6 +287,317 @@ void CloseTimeoutClients(CutisServer *server) {
     }
   }
   listReleaseIterator(li);
+}
+
+#define CutisSaveDBRelease() do { \
+    fclose(fp);                   \
+    CutisLog(CUTIS_WARNING, "Error saving DB on disk: %s", strerror(errno)); \
+    if (di) {                     \
+      DictReleaseIterator(di);    \
+    }                             \
+    return CUTIS_ERR;             \
+  } while (0)
+
+int SaveDB(CutisServer *server, const char *filename) {
+  int j = 0;
+  uint8_t type = 0;
+  uint32_t len = 0;
+  FILE *fp = NULL;
+  char tmpfile[256];
+  DictIterator *di = NULL;
+  DictEntry *de = NULL;
+
+  snprintf(tmpfile, sizeof(tmpfile), CUTIS_TMP_FILENAME,
+           (int)time(NULL), (long int) random());
+  fp = fopen(tmpfile, "w");
+  if (!fp) {
+    CutisLog(CUTIS_WARNING, "Failed saving the DB: %s", strerror(errno));
+    return CUTIS_ERR;
+  }
+
+  if (fwrite(CUTIS_DB_SIGNATURE, 9, 1, fp) == 0) {
+    CutisSaveDBRelease();
+  }
+
+  for (j = 0; j < server->db_num; j++) {
+    Dict *dict = server->dict[j];
+    if (DictGetHashTableUsed(dict) == 0) {
+      continue;
+    }
+    di = DictGetIterator(dict);
+    if (!di) {
+      fclose(fp);
+      return CUTIS_ERR;
+    }
+
+    // Write the SELECT DB opcode
+    type = CUTIS_SELECT_DB;
+    len = htonl(j);
+    if (fwrite(&type, 1, 1, fp) == 0) {
+      CutisSaveDBRelease();
+    }
+    if (fwrite(&len, 4, 1, fp) == 0) {
+      CutisSaveDBRelease();
+    }
+
+    // Iterate this DB writing every entry.
+    while ((de = DictNext(di)) != NULL) {
+      sds key = DictGetEntryKey(de);
+      CutisObject *o = DictGetEntryVal(de);
+
+      type = o->type;
+      len = htonl(sdslen(key));
+      if (fwrite(&type, 1, 1, fp) == 0) {
+        CutisSaveDBRelease();
+      }
+      if (fwrite(&len, 4, 1, fp) == 0) {
+        CutisSaveDBRelease();
+      }
+      if (fwrite(key, 1, sdslen(key), fp) == 0) {
+        CutisSaveDBRelease();
+      }
+      if (type == CUTIS_STRING) {
+        // Save a string value
+        sds val = o->ptr;
+        len = htonl(sdslen(val));
+        if (fwrite(&len, 4, 1, fp) == 0) {
+          CutisSaveDBRelease();
+        }
+        if (fwrite(val, 1, sdslen(val), fp) == 0) {
+          CutisSaveDBRelease();
+        }
+      } else if (type == CUTIS_LIST) {
+        // Save a list value.
+        List *l = o->ptr;
+        ListNode *ln = l->head;
+
+        len = htonl(listLength(l));
+        if (fwrite(&len, 4, 1, fp) == 0) {
+          CutisSaveDBRelease();
+        }
+        while (ln) {
+          o = listNodeValue(ln);
+          len = htonl(sdslen(o->ptr));
+          if (fwrite(&len, 4, 1, fp) == 0) {
+            CutisSaveDBRelease();
+          }
+          if (fwrite(o->ptr, 1, sdslen(o->ptr), fp) == 0) {
+            CutisSaveDBRelease();
+          }
+          ln = ln->next;
+        }
+      } else {
+        assert(0);
+      }
+    }
+    DictReleaseIterator(di);
+    di = NULL;
+  }
+
+  // EOF opcode
+  type = CUTIS_EOF;
+  if (fwrite(&type, 1, 1, fp) == 0) {
+    CutisSaveDBRelease();
+  }
+  fclose(fp);
+
+  // Use RENAME to make sure the DB file is changed atomically only
+  // if the generate DB file is OK.
+  if (rename(tmpfile, filename) == -1) {
+    CutisLog(CUTIS_WARNING, "Error moving temp DB file to the final "
+                            "destination: %s", strerror(errno));
+    unlink(tmpfile);
+    return CUTIS_ERR;
+  }
+  CutisLog(CUTIS_NOTICE, "DB saved on disk");
+  server->dirty = 0;
+  server->last_save = time(NULL);
+  return CUTIS_OK;
+}
+
+int SaveDBBackground(CutisServer *server, const char *filename) {
+  pid_t child;
+
+  if (server->bg_saving) {
+    return CUTIS_ERR;
+  }
+
+  if ((child = fork()) == 0) {
+    // Child
+    close(server->fd);
+    if (SaveDB(server, filename) == CUTIS_OK) {
+      exit(0);
+    } else {
+      exit(1);
+    }
+  } else {
+    // Parent
+    CutisLog(CUTIS_NOTICE, "Background saving started by pid %d", child);
+    server->bg_saving = 1;
+    return CUTIS_OK;
+  }
+  return CUTIS_OK; // unreachable
+}
+
+#define CutisLoadDBRelease() do {                          \
+    fclose(fp);                                            \
+    if (key != buf) {                                      \
+      zfree(key);                                          \
+    }                                                      \
+    if (val != vbuf) {                                     \
+        zfree(val);                                        \
+    }                                                      \
+    CutisLog(CUTIS_WARNING, "Short read loading DB. "      \
+             "Unrecoverable error, exiting now.");         \
+    exit(1);                                               \
+    return CUTIS_ERR;                                      \
+  } while (0)
+
+
+int LoadDB(CutisServer *server, const char *filename) {
+  FILE *fp = NULL;
+  char buf[CUTIS_LOAD_BUF_LEN];
+  char vbuf[CUTIS_LOAD_BUF_LEN];
+  char *key = NULL, *val = NULL;
+  int retval = 0;
+  uint8_t type = 0;
+  uint32_t klen, vlen, dbid;
+  Dict *dict = server->dict[0];
+
+  fp = fopen(filename, "r");
+  if (!fp) {
+    return CUTIS_ERR;
+  }
+  if (fread(buf, 1, 9, fp) == 0) {
+    CutisLoadDBRelease();
+  }
+  if (memcmp(buf, CUTIS_DB_SIGNATURE, 9) != 0) {
+    fclose(fp);
+    CutisLog(CUTIS_WARNING, "Wrong signature trying to load DB from file");
+    return CUTIS_ERR;
+  }
+
+  while (1) {
+    CutisObject *o;
+    // Read type
+    if (fread(&type, 1, 1, fp) == 0) {
+      CutisLoadDBRelease();
+    }
+    if (type == CUTIS_EOF) {
+      break;
+    }
+    // Handle SELECT DB opcode as a special case
+    if (type == CUTIS_SELECT_DB) {
+      if (fread(&dbid, 4, 1, fp) == 0) {
+        CutisLoadDBRelease();
+      }
+      dbid = ntohl(dbid);
+      if (dbid >= (unsigned) server->db_num) {
+        CutisLog(CUTIS_WARNING, "FATAL: Data file was created with a "
+                                "Cutis server compiled to handle more than %d"
+                                " databases. Exiting\n", server->db_num);
+        exit(1);
+      }
+      dict = server->dict[dbid];
+      continue;
+    }
+
+    // Read key
+    if (fread(&klen, 4, 1, fp) == 0) {
+      CutisLoadDBRelease();
+    }
+    klen = ntohl(klen);
+    if (klen <= CUTIS_LOAD_BUF_LEN) {
+      key = buf;
+    } else {
+      key = zmalloc(klen);
+      if (!key) {
+        CutisOom("Loading DB from file");
+      }
+    }
+    if (fread(key, 1, klen, fp) == 0) {
+      CutisLoadDBRelease();
+    }
+
+    if (type == CUTIS_STRING) {
+      // Read string value.
+      if (fread(&vlen, 4, 1, fp) == 0) {
+        CutisLoadDBRelease();
+      }
+      vlen = ntohl(vlen);
+      if (vlen <= CUTIS_LOAD_BUF_LEN) {
+        val = vbuf;
+      } else {
+        val = zmalloc(vlen);
+        if (!val) {
+          CutisOom("Loading DB from file");
+        }
+      }
+      if (fread(val, 1, vlen, fp) == 0) {
+        CutisLoadDBRelease();
+      }
+      o = CreateCutisObject(CUTIS_STRING, sdsnewlen(val, vlen));
+    } else if (type == CUTIS_LIST) {
+      // Read list value.
+      uint32_t llen;
+      if (fread(&llen, 4, 1, fp) == 0) {
+        CutisLoadDBRelease();
+      }
+      llen = ntohl(llen);
+      o = CreateListObject();
+      // Load every single element of the list.
+      while (llen--) {
+        CutisObject *el;
+        if (fread(&vlen, 4, 1, fp) == 0) {
+          CutisLoadDBRelease();
+        }
+        vlen = ntohl(vlen);
+        if (vlen <= CUTIS_LOAD_BUF_LEN) {
+          val = vbuf;
+        } else {
+          val = zmalloc(vlen);
+          if (!val) {
+            CutisOom("Loading DB from file");
+          }
+        }
+        if (fread(val, 1, vlen, fp) == 0) {
+          CutisLoadDBRelease();
+        }
+        el = CreateCutisObject(CUTIS_STRING, sdsnewlen(val, vlen));
+        if (!listAddNodeTail(o->ptr, el)) {
+          CutisOom("listAddNodeTail");
+        }
+        // free the temp buffer if needed
+        if (val != vbuf) {
+          zfree(val);
+        }
+        val = NULL;
+      }
+    } else {
+      assert(0);
+    }
+
+    // Add the new object in the hash table.
+    retval = DictAdd(dict, sdsnewlen(key, klen), o);
+    if (retval == DICT_ERR) {
+      CutisLog(CUTIS_WARNING, "Loading DB, duplicated key found! "
+                              "Unrecoverable error, exiting now");
+      exit(1);
+    }
+
+    // Iteration cleanup
+    if (key != buf) {
+      zfree(key);
+    }
+    if (val != vbuf) {
+      zfree(val);
+    }
+    key = NULL;
+    val = NULL;
+  }
+
+  fclose(fp);
+  return CUTIS_OK;
 }
 
 static void interrupt_handler(int sig) {

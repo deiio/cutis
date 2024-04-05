@@ -18,6 +18,7 @@ OBJ = commands/command.o    \
       server/server.o       \
       server/client.o       \
       utils/log.o           \
+      utils/string_util.o   \
       cutis.o
 
 PRGNAME = cutis-server
@@ -70,6 +71,8 @@ server/server.o: server/server.c server/server.h \
 
 utils/log.o: utils/log.c utils/log.h \
              server/server.h
+
+utils/string_util.o: utils/string_util.c utils/string_util.h
 
 cutis.o: cutis.c         \
          server/server.h \

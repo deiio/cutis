@@ -33,6 +33,7 @@ typedef struct SharedObject {
 extern SharedObject shared;
 
 CutisObject *CreateCutisObject(int type, void *ptr);
+void ReleaseCutisObject(CutisObject *o);
 CutisObject *CreateListObject();
 void FreeStringObject(CutisObject *o);
 void FreeListObject(CutisObject *o);
@@ -41,5 +42,6 @@ void IncrRefCount(CutisObject *o);
 void DecrRefCount(CutisObject *o);
 
 void InitSharedObjects();
+void ReleaseSharedObjects();
 
 #endif  // COMMANDS_OBJECT_H_

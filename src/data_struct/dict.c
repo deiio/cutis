@@ -242,7 +242,7 @@ static int DictGenericDelete(Dict *ht, const void *key, int no_free) {
     return DICT_ERR;
   }
 
-  h = DictHashKey(ht, key);
+  h = DictHashKey(ht, key) & ht->size_mask;
   he = ht->table[h];
 
   prev_he = NULL;
