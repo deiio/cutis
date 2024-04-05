@@ -22,6 +22,10 @@ int main(int argc, char *argv[]) {
   }
 
   InitServer(server);
+
+  if (LoadDB(server, CUTIS_DB_NAME) == CUTIS_OK) {
+    CutisLog(CUTIS_NOTICE, "DB loaded from disk");
+  }
   CutisLog(CUTIS_NOTICE, "Server started, Cutis version " CUTIS_VERSION);
   if (StartServer(server) != CUTIS_OK) {
     CutisLog(CUTIS_WARNING, "Server started failed");

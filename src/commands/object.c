@@ -35,6 +35,10 @@ CutisObject *CreateCutisObject(int type, void *ptr) {
   return o;
 }
 
+void ReleaseCutisObject(CutisObject *o) {
+  zfree(o);
+}
+
 CutisObject *CreateListObject() {
   List *l = listCreate();
   if (!l) {
@@ -92,4 +96,15 @@ void InitSharedObjects() {
   shared.zero = CreateCutisObject(CUTIS_STRING, sdsnew("0\r\n"));
   shared.one = CreateCutisObject(CUTIS_STRING, sdsnew("1\r\n"));
   shared.pong = CreateCutisObject(CUTIS_STRING, sdsnew("+PONG\r\n"));
+}
+
+void ReleaseSharedObjects() {
+  DecrRefCount(shared.crlf);
+  DecrRefCount(shared.ok);
+  DecrRefCount(shared.err);
+  DecrRefCount(shared.zerobulk);
+  DecrRefCount(shared.nil);
+  DecrRefCount(shared.zero);
+  DecrRefCount(shared.one);
+  DecrRefCount(shared.pong);
 }

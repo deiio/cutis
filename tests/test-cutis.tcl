@@ -29,6 +29,19 @@ proc main {server port} {
         cutis_get $fd x
     } {foobar}
 
+    test {DEL against a single item} {
+        cutis_del $fd x
+        cutis_get $fd x
+    } {}
+
+    test {EXISTS} {
+        set res {}
+        cutis_set $fd newkey test
+        append res [cutis_exists $fd newkey]
+        cutis_del $fd newkey
+        append res [cutis_exists $fd newkey]
+    } {10}
+
     puts ""
     puts "[expr $::passed+$::failed] tests, $::passed passed, $::failed failed"
     if {$::failed > 0} {
@@ -103,6 +116,16 @@ proc cutis_set {fd key val} {
 proc cutis_get {fd key} {
     cutis_writenl $fd "get $key"
     cutis_bulk_read $fd
+}
+
+proc cutis_del {fd key} {
+    cutis_writenl $fd "del $key"
+    cutis_read_retcode $fd
+}
+
+proc cutis_exists {fd key} {
+    cutis_writenl $fd "exists $key"
+    cutis_read_integer $fd
 }
 
 if {$argc == 0} {
