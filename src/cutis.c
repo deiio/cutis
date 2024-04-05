@@ -13,6 +13,7 @@ int main(int argc, char *argv[]) {
   CutisServer *server = GetSingletonServer();
   InitServerConfig(server);
   if (argc == 2) {
+    ResetServerSaveParams(server);
     if (LoadServerConfig(server, argv[1]) == CUTIS_ERR) {
       return 1;
     }
