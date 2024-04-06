@@ -157,6 +157,26 @@ int LoadServerConfig(CutisServer *server, const char *filename) {
         err = sdsnew("Invalid port");
         break;
       }
+    } else if (strcmp(argv[0], "timeout") == 0 && argc == 2) {
+      server->max_idle_time = atoi(argv[1]);
+      if (server->max_idle_time < 1) {
+        err = sdsnew("Invalid timeout value");
+        break;
+      }
+    } else if (strcmp(argv[0], "save") == 0 && argc == 3) {
+      int seconds = atoi(argv[1]);
+      int changes = atoi(argv[2]);
+      if (seconds < 1 || changes < 0) {
+        err = sdsnew("Invalid save parameters");
+        break;
+      }
+      AppendServerSaveParams(server, seconds, changes);
+    } else if (strcmp(argv[0], "dir") == 0 && argc == 2) {
+      if (chdir(argv[1]) == -1) {
+        err = sdscatprintf(sdsempty(), "Can't chdir to '%s': '%s'",
+                           argv[1], strerror(errno));
+        break;
+      }
     } else if (strcmp(argv[0], "loglevel") == 0 && argc == 2) {
       if (strcmp(argv[1], "debug") == 0) {
         server->verbosity = CUTIS_DEBUG;
@@ -186,6 +206,12 @@ int LoadServerConfig(CutisServer *server, const char *filename) {
           break;
         }
         fclose(log);
+      }
+    } else if (strcmp(argv[0], "databases") == 0 && argc == 2) {
+      server->db_num = atoi(argv[1]);
+      if (server->db_num < 1) {
+        err = sdsnew("Invalid number of databases");
+        break;
       }
     } else {
       err = sdsnew("Bad directive or wrong number of arguments");
@@ -263,6 +289,8 @@ int CleanServer(CutisServer *server) {
   }
   listReleaseIterator(li);
   listRelease(server->free_objs);
+
+  ResetServerSaveParams(server);
 
   AeDeleteEventLoop(server->el);
 
