@@ -413,6 +413,7 @@ void LRangeCommand(CutisClient *c) {
       AddReplySds(c, sdscatprintf(sdsempty(), "%d\r\n", range_len));
       for (j = 0; j < range_len; j++) {
         CutisObject *el = listNodeValue(ln);
+        AddReplySds(c, sdscatprintf(sdsempty(), "%d\r\n", sdslen(el->ptr)));
         AddReply(c, el);
         AddReply(c, shared.crlf);
         ln = ln->next;

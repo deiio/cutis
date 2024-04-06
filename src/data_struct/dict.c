@@ -144,7 +144,7 @@ int DictExpand(Dict *ht, unsigned int size) {
 
   // The size is invalid if it is smaller than the number of
   // elements already inside the hast table.
-  if (ht->size > size) {
+  if (ht->used > size) {
     return DICT_ERR;
   }
 

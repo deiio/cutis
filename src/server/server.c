@@ -5,12 +5,15 @@
 
 #include "server/server.h"
 
+#include <arpa/inet.h>
 #include <assert.h>
+#include <inttypes.h>
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -662,8 +665,7 @@ static int ServerCron(struct AeEventLoop *event_loop,
     if (!(loops % 5) && used > 0) {
       CutisLog(CUTIS_DEBUG, "DB %d: %u keys in %u slots HT", j, used, size);
     }
-    if (size && used && size > CUTIS_HT_MINSLOTS &&
-        (used * 100 / size < CUTIS_HT_MINFILL)) {
+    if (size >= CUTIS_HT_MINSLOTS && (used * 100 / size < CUTIS_HT_MINFILL)) {
       CutisLog(CUTIS_NOTICE, "The hash table %d is to spares, resize it...", j);
       DictResize(server->dict[j]);
       CutisLog(CUTIS_NOTICE, "Hash table %d resized.", j);
