@@ -406,7 +406,7 @@ int SaveDB(CutisServer *server, const char *filename) {
         if (fwrite(&len, 4, 1, fp) == 0) {
           CutisSaveDBRelease();
         }
-        if (fwrite(val, 1, sdslen(val), fp) == 0) {
+        if (len > 0 && fwrite(val, 1, sdslen(val), fp) == 0) {
           CutisSaveDBRelease();
         }
       } else if (type == CUTIS_LIST) {
@@ -424,7 +424,7 @@ int SaveDB(CutisServer *server, const char *filename) {
           if (fwrite(&len, 4, 1, fp) == 0) {
             CutisSaveDBRelease();
           }
-          if (fwrite(o->ptr, 1, sdslen(o->ptr), fp) == 0) {
+          if (len > 0 && fwrite(o->ptr, 1, sdslen(o->ptr), fp) == 0) {
             CutisSaveDBRelease();
           }
           ln = ln->next;
@@ -576,7 +576,7 @@ int LoadDB(CutisServer *server, const char *filename) {
           CutisOom("Loading DB from file");
         }
       }
-      if (fread(val, 1, vlen, fp) == 0) {
+      if (vlen > 0 && fread(val, 1, vlen, fp) == 0) {
         CutisLoadDBRelease();
       }
       o = CreateCutisObject(CUTIS_STRING, sdsnewlen(val, vlen));
@@ -603,7 +603,7 @@ int LoadDB(CutisServer *server, const char *filename) {
             CutisOom("Loading DB from file");
           }
         }
-        if (fread(val, 1, vlen, fp) == 0) {
+        if (vlen > 0 && fread(val, 1, vlen, fp) == 0) {
           CutisLoadDBRelease();
         }
         el = CreateCutisObject(CUTIS_STRING, sdsnewlen(val, vlen));
