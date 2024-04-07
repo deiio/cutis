@@ -371,6 +371,65 @@ proc main {server port} {
         cutis_lrange $fd mylist 0 -1
     } {99 98 97 96 95}
 
+    test {LSET basic usage} {
+        cutis_lset $fd mylist 1 foo
+        cutis_lset $fd mylist -1 bar
+        cutis_lrange $fd mylist 0 -1
+    } {99 foo 97 96 bar}
+
+    test {LSET out of range index} {
+        cutis_lset $fd mylist 10 foo
+    } {-ERR*range*}
+
+    test {LSET against non existing key} {
+        cutis_set $fd nolist foobar
+        cutis_lset $fd nolist 0 foo
+    } {-ERR*value*}
+
+    test {SADD, SCARD, SINMEMBER, SMEMBERS basic usage} {
+        cutis_sadd $fd myset foo
+        cutis_sadd $fd myset bar
+        list [cutis_scard $fd myset] \
+             [cutis_sismember $fd myset foo] \
+             [cutis_sismember $fd myset bar] \
+             [cutis_sismember $fd myset bla] \
+             [lsort [cutis_smembers $fd myset]]
+    } {2 1 1 0 {bar foo}}
+
+    test {SADD adding the same element multiple times} {
+        cutis_sadd $fd myset foo
+        cutis_sadd $fd myset foo
+        cutis_sadd $fd myset foo
+        cutis_scard $fd myset
+    } {2}
+
+    test {SADD against non set} {
+        cutis_sadd $fd mylist foo
+    } {-ERR*}
+
+    test {SREM basic usage} {
+        cutis_sadd $fd myset ciao
+        cutis_srem $fd myset foo
+        lsort [cutis_smembers $fd myset]
+    } {bar ciao}
+
+    test {Mass SADD and SINTER with two sets} {
+        for {set i 0} {$i < 1000} {incr i} {
+            cutis_sadd $fd set1 $i
+            cutis_sadd $fd set2 [expr $i+995]
+        }
+        lsort [cutis_sinter $fd set1 set2]
+    } {995 996 997 998 999}
+
+    test {SINTER against three sets} {
+        cutis_sadd $fd set3 999
+        cutis_sadd $fd set3 995
+        cutis_sadd $fd set3 1000
+        cutis_sadd $fd set3 2000
+        lsort [cutis_sinter $fd set1 set2 set3]
+    } {995 999}
+
+
     # Leave the user with a clean DB before to exit
     test {DEL all keys again (DB 0)} {
         foreach key [cutis_keys $fd *] {

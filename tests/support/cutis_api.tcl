@@ -77,6 +77,11 @@ proc cutis_llen {fd key} {
     cutis_read_integer $fd
 }
 
+proc cutis_scard {fd key} {
+    cutis_writenl $fd "scard $key"
+    cutis_read_integer $fd
+}
+
 proc cutis_lindex {fd key index} {
     cutis_writenl $fd "lindex $key $index"
     cutis_bulk_read $fd
@@ -112,3 +117,32 @@ proc cutis_rpop {fd key} {
     cutis_bulk_read $fd
 }
 
+proc cutis_lset {fd key index val} {
+    cutis_writenl $fd "lset $key $index [string length $val]\r\n$val"
+    cutis_read_retcode $fd
+}
+
+proc cutis_sadd {fd key val} {
+    cutis_writenl $fd "sadd $key [string length $val]\r\n$val"
+    cutis_read_retcode $fd
+}
+
+proc cutis_srem {fd key val} {
+    cutis_writenl $fd "srem $key [string length $val]\r\n$val"
+    cutis_read_retcode $fd
+}
+
+proc cutis_sismember {fd key val} {
+    cutis_writenl $fd "sismember $key [string length $val]\r\n$val"
+    cutis_read_integer $fd
+}
+
+proc cutis_sinter {fd args} {
+    cutis_writenl $fd "sinter [join $args]"
+    cutis_multi_bulk_read $fd
+}
+
+proc cutis_smembers {fd key} {
+    cutis_writenl $fd "smembers $key"
+    cutis_multi_bulk_read $fd
+}

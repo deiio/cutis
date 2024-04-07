@@ -35,6 +35,7 @@ extern SharedObject shared;
 CutisObject *CreateCutisObject(int type, void *ptr);
 void ReleaseCutisObject(CutisObject *o);
 CutisObject *CreateListObject();
+CutisObject *CreateSetObject();
 void FreeStringObject(CutisObject *o);
 void FreeListObject(CutisObject *o);
 void FreeSetObject(CutisObject *o);

@@ -31,6 +31,13 @@ static CutisCommand cmdTable[] = {
     {"lindex", LIndexCommand, 3, CUTIS_CMD_INLINE},
     {"lrange", LRangeCommand, 4, CUTIS_CMD_INLINE},
     {"ltrim", LTrimCommand, 4, CUTIS_CMD_INLINE},
+    {"lset", LSetCommand, 4, CUTIS_CMD_BULK},
+    {"sadd", SAddCommand, 3, CUTIS_CMD_BULK},
+    {"srem", SRemCommand, 3, CUTIS_CMD_BULK},
+    {"sismember", SIsMemberCommand, 3, CUTIS_CMD_BULK},
+    {"scard", SCardCommand, 2, CUTIS_CMD_INLINE},
+    {"sinter", SInterCommand, -2, CUTIS_CMD_INLINE},
+    {"smembers", SInterCommand, 2, CUTIS_CMD_INLINE},
     {"select", SelectCommand, 2, CUTIS_CMD_INLINE},
     {"move", MoveCommand, 3, CUTIS_CMD_INLINE},
     {"rename", RenameCommand, 3, CUTIS_CMD_INLINE},
@@ -44,6 +51,7 @@ static CutisCommand cmdTable[] = {
     {"ping", PingCommand, 1, CUTIS_CMD_INLINE},
     {"echo", EchoCommand, 2, CUTIS_CMD_INLINE},
     {"lastsave", LastSaveCommand, 1, CUTIS_CMD_INLINE},
+    {"type", TypeCommand, 2, CUTIS_CMD_INLINE},
     {NULL, NULL, 0, 0},
 };
 
@@ -59,7 +67,8 @@ int ProcessCommand(CutisClient *c) {
     AddReplySds(c, sdsnew("-ERR unknown command\r\n"));
     ResetClient(c);
     return 1;
-  } else if (cmd->arity != c->argc) {
+  } else if ((cmd->arity > 0 && cmd->arity != c->argc) ||
+             (c->argc < -cmd->arity)) {
     AddReplySds(c, sdsnew("-ERR wrong number of arguments\r\n"));
     ResetClient(c);
     return 1;
@@ -216,7 +225,7 @@ void RandomKeyCommand(CutisClient *c) {
   if (de == NULL) {
     AddReply(c, shared.crlf);
   } else {
-    AddReply(c, DictGetEntryVal(de));
+    AddReplySds(c, sdsdup(DictGetEntryKey(de)));
     AddReply(c, shared.crlf);
   }
 }
@@ -249,8 +258,8 @@ static void PushGenericCommand(CutisClient *c, int where) {
      o = DictGetEntryVal(de);
      if (o->type != CUTIS_LIST) {
        DecrRefCount(el);
-       AddReplySds(c, sdsnew("-ERR push against existing key not "
-                             "holding a list \r\n"));
+       char *err = "-ERR push against existing key not holding a list \r\n";
+       AddReplySds(c, sdsnew(err));
        return;
      }
      l = o->ptr;
@@ -432,7 +441,8 @@ void LTrimCommand(CutisClient *c) {
   } else {
     CutisObject *o = DictGetEntryVal(de);
     if (o->type != CUTIS_LIST) {
-      AddReplySds(c, sdsnew("-ERR LTRIM against key not holding a list value"));
+      char *err = "-ERR LTRIM against key not holding a list value\r\n";
+      AddReplySds(c, sdsnew(err));
     } else {
       List *l = o->ptr;
       ListNode *ln = NULL;
@@ -477,8 +487,233 @@ void LTrimCommand(CutisClient *c) {
         listDelNode(l, ln);
       }
       AddReply(c, shared.ok);
+      c->server->dirty++;
     }
   }
+}
+
+void LSetCommand(CutisClient *c) {
+  int index = atoi(c->argv[2]);
+  DictEntry *de = DictFind(c->dict, c->argv[1]);
+
+  if (!de) {
+    AddReplySds(c, sdsnew("-ERR no such key\r\n"));
+  } else {
+    CutisObject *o = DictGetEntryVal(de);
+    if (o->type != CUTIS_LIST) {
+      const char *err = "-ERR LSET against key not holding a list value\r\n";
+      AddReplySds(c, sdsnew(err));
+    } else {
+      List *l = o->ptr;
+      ListNode *ln = listIndex(l, index);
+
+      if (!ln) {
+        AddReplySds(c, sdsnew("-ERR index out of range\r\n"));
+      } else {
+        CutisObject *el = listNodeValue(ln);
+        DecrRefCount(el);
+        listNodeValue(ln) = CreateCutisObject(CUTIS_STRING, c->argv[3]);
+        c->argv[3] = NULL;
+        AddReply(c, shared.ok);
+        c->server->dirty++;
+      }
+    }
+  }
+}
+
+void SAddCommand(CutisClient *c) {
+  CutisObject *el, *set;
+  DictEntry *de = DictFind(c->dict, c->argv[1]);
+
+  if (!de) {
+    set = CreateSetObject();
+    DictAdd(c->dict, c->argv[1], set);
+    c->argv[1] = NULL;
+  } else {
+    set = DictGetEntryVal(de);
+    if (set->type != CUTIS_SET) {
+      char *err = "-ERR SADD against key not holding a set value\r\n";
+      AddReplySds(c, sdsnew(err));
+      return;
+    }
+  }
+  el = CreateCutisObject(CUTIS_STRING, c->argv[2]);
+  if (DictAdd(set->ptr, el, NULL) == DICT_OK) {
+    c->server->dirty++;
+  } else {
+    DecrRefCount(el);
+  }
+  c->argv[2] = NULL;
+  AddReply(c, shared.ok);
+}
+
+void SRemCommand(CutisClient *c) {
+  DictEntry *de = DictFind(c->dict, c->argv[1]);
+  if (!de) {
+    AddReplySds(c, sdsnew("-ERR no such key\r\n"));
+  } else {
+    CutisObject *set, *el;
+    set = DictGetEntryVal(de);
+    if (set->type != CUTIS_SET) {
+      char *err = "-ERR SREM against key not holding a set value\r\n";
+      AddReplySds(c, sdsnew(err));
+      return;
+    }
+    el = CreateCutisObject(CUTIS_STRING, c->argv[2]);
+    if (DictDelete(set->ptr, el) == DICT_OK) {
+      c->server->dirty++;
+    }
+    el->ptr = NULL;
+    DecrRefCount(el);
+    AddReply(c, shared.ok);
+  }
+}
+
+void SIsMemberCommand(CutisClient *c) {
+  DictEntry *de = DictFind(c->dict, c->argv[1]);
+
+  if (!de) {
+    AddReplySds(c, sdsnew("-1\r\n"));
+  } else {
+    CutisObject *set, *el;
+    set = DictGetEntryVal(de);
+    if (set->type != CUTIS_SET) {
+      AddReplySds(c, sdsnew("-1\r\n"));
+      return;
+    }
+    el = CreateCutisObject(CUTIS_STRING, c->argv[2]);
+    if (DictFind(set->ptr, el)) {
+      AddReply(c, shared.one);
+    } else {
+      AddReply(c, shared.zero);
+    }
+    el->ptr = NULL;
+    DecrRefCount(el);
+  }
+}
+
+void SCardCommand(CutisClient *c) {
+  DictEntry *de = DictFind(c->dict, c->argv[1]);
+
+  if (!de) {
+    AddReply(c, shared.zero);
+    return;
+  } else {
+    CutisObject *set = DictGetEntryVal(de);
+    if (set->type != CUTIS_SET) {
+      AddReplySds(c, sdsnew("-1\r\n"));
+    } else {
+      Dict *d = set->ptr;
+      AddReplySds(c, sdscatprintf(sdsempty(), "%d\r\n",
+                                  DictGetHashTableUsed(d)));
+    }
+  }
+}
+
+static int qsortCompareSetsByCardinality(const void *s1, const void *s2) {
+  Dict **d1 = (void*)s1, **d2 = (void*)s2;
+  return (int)DictGetHashTableUsed(*d1) - (int)DictGetHashTableUsed(*d2);
+}
+
+void SInterCommand(CutisClient *c) {
+  Dict **dv = zmalloc(sizeof(Dict*) * (c->argc - 1));
+  DictIterator *di;
+  DictEntry *de;
+  CutisObject *lenobj;
+  int j, cardinality = 0;
+
+  if (!dv) {
+    CutisOom("sinterCommand");
+  }
+
+  for (j = 0; j < c->argc - 1; j++) {
+    CutisObject *set;
+    DictEntry *de;
+    de = DictFind(c->dict, c->argv[j+1]);
+    if (!de) {
+      char *err = "No such key";
+      zfree(dv);
+      AddReplySds(c, sdscatprintf(sdsempty(), "%d\r\n%s\r\n",
+                                  -(int)strlen(err), err));
+      return;
+    }
+    set = DictGetEntryVal(de);
+    if (set->type != CUTIS_SET) {
+      char *err = "SINTER against key not holding a set value";
+      AddReplySds(c, sdscatprintf(sdsempty(), "%d\r\n%d\r\n",
+                                  -(int)strlen(err), err));
+      zfree(dv);
+    }
+    dv[j] = set->ptr;
+  }
+
+  // Sort sets from the smallest to largest, this will improve our
+  // algorithm's performance.
+  qsort(dv, c->argc-1, sizeof(Dict*), qsortCompareSetsByCardinality);
+
+  // The first thing we should output is the total number of elements.
+  // Since this is a multi-bulk write, but at this stage we don't know
+  // the intersection set size, so we use a trick, append an empty
+  // object to the output list and save the pointer to later modify
+  // it with the right length.
+  lenobj = CreateCutisObject(CUTIS_STRING, NULL);
+  AddReply(c, lenobj);
+  DecrRefCount(lenobj);
+
+  // Iterate all the elements of the first (smallest) set, and test
+  // the element against all the other sets, if at least one set does
+  // not include the element it is discarded.
+  di = DictGetIterator(dv[0]);
+  if (!di) {
+    CutisOom("DictGetIterator");
+  }
+
+  while ((de = DictNext(di)) != NULL) {
+    CutisObject *el;
+    for (j = 1; j < c->argc - 1; j++) {
+      if (DictFind(dv[j], DictGetEntryKey(de)) == NULL) {
+        break;
+      }
+    }
+    if (j != c->argc - 1) {
+      // At least one set don't contain the member.
+      continue;
+    }
+    el = DictGetEntryKey(de);
+    AddReplySds(c, sdscatprintf(sdsempty(), "%d\r\n", sdslen(el->ptr)));
+    AddReply(c, el);
+    AddReply(c, shared.crlf);
+    cardinality++;
+  }
+  lenobj->ptr = sdscatprintf(sdsempty(), "%d\r\n", cardinality);
+  DictReleaseIterator(di);
+  zfree(dv);
+}
+
+void TypeCommand(CutisClient *c) {
+  char *type;
+  DictEntry *de = DictFind(c->dict, c->argv[1]);
+  if (!de) {
+    type = "none";
+  } else {
+    CutisObject *o = DictGetEntryVal(de);
+    switch (o->type) {
+    case CUTIS_STRING:
+      type = "string";
+      break;
+    case CUTIS_LIST:
+      type = "list";
+      break;
+    case CUTIS_SET:
+      type = "set";
+      break;
+    default:
+      type = "unknown";
+      break;
+    }
+  }
+  AddReplySds(c, sdsnew(type));
+  AddReply(c, shared.crlf);
 }
 
 void SelectCommand(CutisClient *c) {

@@ -45,7 +45,15 @@ void LLenCommand(CutisClient *c);
 void LIndexCommand(CutisClient *c);
 void LRangeCommand(CutisClient *c);
 void LTrimCommand(CutisClient *c);
+void LSetCommand(CutisClient *c);
 
+void SAddCommand(CutisClient *c);
+void SRemCommand(CutisClient *c);
+void SIsMemberCommand(CutisClient *c);
+void SCardCommand(CutisClient *c);
+void SInterCommand(CutisClient *c);
+
+void TypeCommand(CutisClient *c);
 void SelectCommand(CutisClient *c);
 void MoveCommand(CutisClient *c);
 void RenameCommand(CutisClient *c);
