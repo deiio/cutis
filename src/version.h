@@ -6,6 +6,6 @@
 #ifndef VERSION_H_
 #define VERSION_H_
 
-#define CUTIS_VERSION "0.0.2"
+#define CUTIS_VERSION "0.0.3"
 
 #endif  // VERSION_H_
