@@ -66,5 +66,10 @@ int LoadDB(CutisServer *server, const char *filename);
 void AppendServerSaveParams(CutisServer *server, time_t seconds, int changes);
 void ResetServerSaveParams(CutisServer *server);
 
+// DictType functions
+unsigned int sdsDictHashFunction(const void *key);
+int sdsDictKeyCompare(void *priv_data, const void *key1, const void *key2);
+void sdsDictKeyDestructor(void *priv_data, void *val);
+void sdsDictValDestructor(void *priv_data, void *val);
 
 #endif  // SERVER_SERVER_H_

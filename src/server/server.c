@@ -45,14 +45,6 @@ static int ServerCron(struct AeEventLoop *event_loop,
 static int AcceptHandler(AeEventLoop *event_loop, int fd,
                          void *client_data, int mask);
 
-// DictType functions
-static unsigned int sdsDictHashFunction(const void *key);
-static int sdsDictKeyCompare(void *priv_data, const void *key1,
-                             const void *key2);
-static void sdsDictKeyDestructor(void *priv_data, void *val);
-static void sdsDictValDestructor(void *priv_data, void *val);
-
-
 DictType sdsDictType = {
     sdsDictHashFunction,
     NULL,
@@ -334,6 +326,7 @@ void CloseTimeoutClients(CutisServer *server) {
 
 #define CutisSaveDBRelease() do { \
     fclose(fp);                   \
+    unlink(tmpfile);              \
     CutisLog(CUTIS_WARNING, "Error saving DB on disk: %s", strerror(errno)); \
     if (di) {                     \
       DictReleaseIterator(di);    \
@@ -406,7 +399,8 @@ int SaveDB(CutisServer *server, const char *filename) {
         if (fwrite(&len, 4, 1, fp) == 0) {
           CutisSaveDBRelease();
         }
-        if (len > 0 && fwrite(val, 1, sdslen(val), fp) == 0) {
+        if (sdslen(val) > 0 &&
+            fwrite(val, 1, sdslen(val), fp) == 0) {
           CutisSaveDBRelease();
         }
       } else if (type == CUTIS_LIST) {
@@ -424,11 +418,39 @@ int SaveDB(CutisServer *server, const char *filename) {
           if (fwrite(&len, 4, 1, fp) == 0) {
             CutisSaveDBRelease();
           }
-          if (len > 0 && fwrite(o->ptr, 1, sdslen(o->ptr), fp) == 0) {
+          if (sdslen(o->ptr) > 0 &&
+              fwrite(o->ptr, 1, sdslen(o->ptr), fp) == 0) {
             CutisSaveDBRelease();
           }
           ln = ln->next;
         }
+      } else if (type == CUTIS_SET) {
+        // Save a set value.
+        Dict *set = o->ptr;
+        DictIterator *dis = DictGetIterator(set);
+        DictEntry *des;
+
+        if (!set) {
+          CutisOom("DictGetIterator");
+        }
+        len = htonl(DictGetHashTableUsed(set));
+        if (fwrite(&len, 4, 1, fp) == 0) {
+          CutisSaveDBRelease();
+        }
+        while ((des = DictNext(dis)) != NULL) {
+          CutisObject *os = DictGetEntryKey(des);
+          len = htonl(sdslen(os->ptr));
+          if (fwrite(&len, 4, 1, fp) == 0) {
+            DictReleaseIterator(dis);
+            CutisSaveDBRelease();
+          }
+          if (sdslen(os->ptr) > 0 &&
+              fwrite(os->ptr, 1, sdslen(os->ptr), fp) == 0) {
+            DictReleaseIterator(dis);
+            CutisSaveDBRelease();
+          }
+        }
+        DictReleaseIterator(dis);
       } else {
         assert(0);
       }
@@ -580,15 +602,15 @@ int LoadDB(CutisServer *server, const char *filename) {
         CutisLoadDBRelease();
       }
       o = CreateCutisObject(CUTIS_STRING, sdsnewlen(val, vlen));
-    } else if (type == CUTIS_LIST) {
-      // Read list value.
+    } else if (type == CUTIS_LIST || type == CUTIS_SET) {
+      // Read list/set value.
       uint32_t llen;
       if (fread(&llen, 4, 1, fp) == 0) {
         CutisLoadDBRelease();
       }
       llen = ntohl(llen);
-      o = CreateListObject();
-      // Load every single element of the list.
+      o = (type == CUTIS_LIST) ? CreateListObject() : CreateSetObject();
+      // Load every single element of the list/set.
       while (llen--) {
         CutisObject *el;
         if (fread(&vlen, 4, 1, fp) == 0) {
@@ -607,8 +629,14 @@ int LoadDB(CutisServer *server, const char *filename) {
           CutisLoadDBRelease();
         }
         el = CreateCutisObject(CUTIS_STRING, sdsnewlen(val, vlen));
-        if (!listAddNodeTail(o->ptr, el)) {
-          CutisOom("listAddNodeTail");
+        if (type == CUTIS_LIST) {
+          if (!listAddNodeTail(o->ptr, el)) {
+            CutisOom("listAddNodeTail");
+          }
+        } else {
+          if (DictAdd(o->ptr, el, NULL) == DICT_ERR) {
+            CutisOom("DictAdd");
+          }
         }
         // free the temp buffer if needed
         if (val != vbuf) {
@@ -760,22 +788,22 @@ static int AcceptHandler(AeEventLoop *event_loop, int fd,
   return ANET_OK;
 }
 
-static unsigned int sdsDictHashFunction(const void *key) {
+unsigned int sdsDictHashFunction(const void *key) {
   return DictGenHashFunction(key, sdslen((sds)key));
 }
 
-static int sdsDictKeyCompare(void *priv_data, const void *key1,
+int sdsDictKeyCompare(void *priv_data, const void *key1,
                              const void *key2) {
   CUTIS_NOT_USED(priv_data);
   return sdscmp((sds)key1, (sds)key2) == 0;
 }
 
-static void sdsDictKeyDestructor(void *priv_data, void *val) {
+void sdsDictKeyDestructor(void *priv_data, void *val) {
   CUTIS_NOT_USED(priv_data);
   sdsfree(val);
 }
 
-static void sdsDictValDestructor(void *priv_data, void *val) {
+void sdsDictValDestructor(void *priv_data, void *val) {
   CUTIS_NOT_USED(priv_data);
   DecrRefCount(val);
 }

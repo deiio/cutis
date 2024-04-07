@@ -13,6 +13,19 @@
 #include "server/server.h"
 #include "utils/log.h"
 
+static int SetDictKeyCompare(void *priv_data, const void *key1,
+                             const void *key2);
+static unsigned int SetDictHashFunction(const void *key);
+
+DictType SetDictType = {
+    SetDictHashFunction,  // hash function
+    NULL,  // key dup
+    NULL,  // val dup
+    SetDictKeyCompare,  // key compare
+    sdsDictValDestructor,  // key destructor
+    NULL,  // val destructor
+};
+
 SharedObject shared;
 
 CutisObject *CreateCutisObject(int type, void *ptr) {
@@ -48,6 +61,14 @@ CutisObject *CreateListObject() {
   return CreateCutisObject(CUTIS_LIST, l);
 }
 
+CutisObject *CreateSetObject() {
+  Dict *d = DictCreate(&SetDictType, NULL);
+  if (!d) {
+    CutisOom("CreateSetObject");
+  }
+  return CreateCutisObject(CUTIS_SET, d);
+}
+
 void FreeStringObject(CutisObject *o) {
   sdsfree(o->ptr);
 }
@@ -57,7 +78,7 @@ void FreeListObject(CutisObject *o) {
 }
 
 void FreeSetObject(CutisObject *o) {
-  // TODO
+  DictRelease(o->ptr);
 }
 
 void IncrRefCount(CutisObject *o) {
@@ -107,4 +128,14 @@ void ReleaseSharedObjects() {
   DecrRefCount(shared.zero);
   DecrRefCount(shared.one);
   DecrRefCount(shared.pong);
+}
+
+int SetDictKeyCompare(void *priv_data, const void *key1, const void *key2) {
+  const CutisObject *o1 = key1, *o2 = key2;
+  return sdsDictKeyCompare(priv_data, o1->ptr, o2->ptr);
+}
+
+unsigned int SetDictHashFunction(const void *key) {
+  const CutisObject *o = key;
+  return DictGenHashFunction(o->ptr, sdslen(o->ptr));
 }
