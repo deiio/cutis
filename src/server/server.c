@@ -342,7 +342,8 @@ void CloseTimeoutClients(CutisServer *server) {
 #define CutisSaveDBRelease() do { \
     fclose(fp);                   \
     unlink(tmpfile);              \
-    CutisLog(CUTIS_WARNING, "Error saving DB on disk: %s", strerror(errno)); \
+    CutisLog(CUTIS_WARNING, "Write error saving DB on disk: %s", \
+             strerror(errno));    \
     if (di) {                     \
       DictReleaseIterator(di);    \
     }                             \
