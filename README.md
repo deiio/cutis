@@ -346,11 +346,11 @@ Work in progress.
 ### Persistence Control Commands
 
 - `SAVE`
-  - Save teh DB on disk. The server hangs while the saving is not completed,
+  - Save the DB on disk. The server hangs while the saving is not completed,
     no connection is served in the meanwhile. An OK code is returned
     when the DB was fully stored in disk.
 - `BGSAVE`
-  - Save teh DB in background. The OK code is immediately returned. Cutis
+  - Save the DB in background. The OK code is immediately returned. Cutis
     forks, the parent continues to serve the clients, the child saves the
     DB on disk then exit. A client may be able to check if the operation
     succeeded using the `LASTSAVE` command.
