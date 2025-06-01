@@ -1,0 +1,68 @@
+# Ruby Client For Cutis.
+# Copyright (c) 2023 furzoom.com, All rights reserved.
+# Author: mn, mn@furzoom.com
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
+
+require 'rubygems'
+require 'rubygems/package_task'
+require 'rake/testtask'
+
+GEM = "cutis"
+GEM_VERSION = "0.0.1"
+AUTHOR = "Niz Furzoom"
+EMAIL = "mn@furzoom.com"
+HOMEPAGE = "https://github.com/deiio/cutis"
+SUMMARY = "Ruby client library for cutis key value storage server"
+
+spec = Gem::Specification.new do |s|
+    s.name = GEM
+    s.version = GEM_VERSION
+    s.platform = Gem::Platform::RUBY
+    s.extra_rdoc_files = ["README.md", "LICENSE"]
+    s.summary = SUMMARY
+    s.description = "#{s.summary}. If you find any bugs, please contract us."
+    s.author = AUTHOR
+    s.email = EMAIL
+    s.homepage = HOMEPAGE
+
+    s.license = "LGPL-3.0-or-later"
+    s.metadata = {
+        "allowed_push_host" => "https://rubygems.org",
+        "license" => "LGPL-3.0-or-later"
+    }
+
+    s.require_path = 'lib'
+    s.files = %w(LICENSE README.md Rakefile) + Dir.glob("{lib,test}/**/*")
+
+end
+
+task :default => :test
+
+desc "Run tests"
+Rake::TestTask.new(:test) do |t|
+    t.pattern = 'test/**/*_test.rb'
+end
+
+Gem::PackageTask.new(spec) do |pkg|
+  pkg.gem_spec = spec
+end
+
+desc "create a gemspec file"
+task :make_spec do
+    File.open("#{GEM}.gemspec", "w") do |file|
+        file.puts spec.to_ruby
+    end
+end
