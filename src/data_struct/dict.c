@@ -253,7 +253,7 @@ static int DictGenericDelete(Dict *ht, const void *key, int no_free) {
   DictEntry *he;
   DictEntry *prev_he;
 
-  if (ht->size == 0) {
+  if (ht->used == 0) {
     return DICT_ERR;
   }
 
@@ -328,7 +328,7 @@ DictEntry *DictFind(Dict *ht, const void *key) {
   DictEntry *he;
   unsigned int h;
 
-  if (ht->size == 0) {
+  if (ht->used == 0) {
     return NULL;
   }
 
@@ -397,7 +397,7 @@ DictEntry *DictGetRandomKey(Dict *ht) {
   int list_len = 0;
   int list_ele;
 
-  if (ht->size == 0) {
+  if (ht->used == 0) {
     return NULL;
   }
 
